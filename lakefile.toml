@@ -1,0 +1,14 @@
+name = "qunity"
+version = "0.1.0"
+defaultTargets = ["qunity"]
+
+[[lean_lib]]
+name = "Qunity"
+
+[[lean_exe]]
+name = "qunity"
+root = "Main"
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
