@@ -5,7 +5,7 @@ namespace Qunity
 
 mutual
   inductive Expression where
-    | null
+    | unit
     | var (x : String)
     | pair (e₁ e₂ : Expression)
     | coherentControl (e : Expression) (T : DataType) (branches : List (Expression × Expression)) (T' : DataType)
@@ -20,6 +20,7 @@ mutual
     | rphase (T : DataType) (e : Expression) (γ γ' : RealConstant)
 end
 
-def x : Expression := .var "x"
+scoped notation "#(" e₁ ", " e₂ ")" => Expression.pair e₁ e₂
+scoped notation "try " e₁ " catch " e₂ => Expression.tryCatch e₁ e₂
 
 end Qunity

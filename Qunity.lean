@@ -5,3 +5,4 @@ import Qunity.Language.Types
 import Qunity.Language.Syntax
 import Qunity.Math.Reals
 import Qunity.Typing.Context
+import Qunity.Typing.Rules

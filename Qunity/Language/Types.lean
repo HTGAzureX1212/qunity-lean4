@@ -18,6 +18,4 @@ infixr:50 " ⊗ " => DataType.product
 infixr:50 " ⇝ " => ProgramType.coherentMap
 infixr:50 " ⇛ " => ProgramType.quantumChannel
 
-def Bit : DataType := .unit ⊕ .unit
-
 end Qunity
