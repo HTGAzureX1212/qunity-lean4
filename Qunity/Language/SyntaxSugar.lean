@@ -41,9 +41,9 @@ def just (T : DataType) : Program := .right .unit T
 def gphase (T : DataType) (r : RealConstant) : Program := .rphase T (.var "x") r r
 
 def fst (T₁ T₂ : DataType) (x₀ x₁ : String) : Program :=
-  .lambda (.pair (.var x₀) (.var x₁)) (T₁ ⊗ T₂) (.var x₀)
+  .lambda (#(.var x₀, .var x₁)) (T₁ ⊗ T₂) (.var x₀)
 def snd (T₁ T₂ : DataType) (x₀ x₁ : String) : Program :=
-  .lambda (.pair (.var x₀) (.var x₁)) (T₁ ⊗ T₂) (.var x₁)
+  .lambda (#(.var x₀, .var x₁)) (T₁ ⊗ T₂) (.var x₁)
 
 open scoped RealConstant
 def had : Program :=

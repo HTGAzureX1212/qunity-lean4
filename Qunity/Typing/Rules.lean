@@ -1,3 +1,4 @@
+import Mathlib.Data.Finset.Basic
 import Qunity.Language.Syntax
 import Qunity.Language.SyntaxSugar
 import Qunity.Language.Types
@@ -5,7 +6,55 @@ import Qunity.Typing.Context
 
 namespace Qunity
 
-open Context
+mutual
+  def FreeVariables : Expression -> Finset Variable
+    | .unit => ∅
+    | .var x => {x}
+    | .pair e₁ e₂
+    | .tryCatch e₁ e₂ => FreeVariables e₁ ∪ FreeVariables e₂
+    | .coherentControl e _ l _ =>
+        FreeVariables e ∪ FreeVariablesBranches l
+    | .application _ e => FreeVariables e
+
+  def FreeVariablesBranches : List (Expression × Expression) → Finset Variable
+    | [] => ∅
+    | (e₁, e₂) :: l =>
+      FreeVariables e₁ ∪ FreeVariables e₂ ∪ FreeVariablesBranches l
+end
+
+inductive Erases (x : String) : DataType -> List Expression -> Prop
+where
+  | erasesVar (n : Nat) (T : DataType) : Erases x T (.replicate n (.var x))
+  | erasesGphase (T : DataType) (l1 : List Expression) (e : Expression) (l2 : List Expression) (γ : RealConstant) :
+      Erases x T (l1 ++ e :: l2) →
+      Erases x T (l1 ++ (e ▹ gphase T γ) :: l2)
+  | erasesCtrl (T T' : DataType) (e : Expression) (l : List (Expression × Expression))  (l1 l2 : List Expression) :
+      Erases x T (l1 ++ l.map Prod.snd ++ l2) →
+      Erases x T (l1 ++ Expression.coherentControl e T l T' :: l2)
+  | erasesPair0 (T₀ T₁ : DataType) (l : List (Expression × Expression)) :
+      Erases x T₀ (l.map Prod.fst) →
+      Erases x (T₀ ⊗ T₁) (l.map (Function.uncurry Expression.pair))
+  | erasesPair1 (T₀ T₁ : DataType) (l : List (Expression × Expression)) :
+      Erases x T₁ (l.map Prod.snd) →
+      Erases x (T₀ ⊗ T₁) (l.map (Function.uncurry Expression.pair))
+
+inductive Spanning : DataType -> List Expression -> Prop where
+  | spanningVoid : Spanning .void []
+  | spanningUnit : Spanning .unit [.unit]
+  | spanningVar : Spanning T [.var x]
+  | spanningSum :
+      Spanning T es →
+      Spanning T' e's →
+      Spanning (T ⊕ T') (es.map (.application (.left T T')) ++ e's.map (.application (.right T T')))
+  | spanningPair (l : List (Expression × List Expression)) :
+      Spanning T (l.map Prod.fst) →
+      (∀ (e l'), (e, l') ∈ l → Spanning T' l') →
+      (∀ (e l'), (e, l') ∈ l → Disjoint (FreeVariables e) ((FreeVariables <$> l').foldl (· ∪ ·) ∅)) →
+      Spanning (T ⊗ T') (l.flatMap fun (e, l') => l'.map fun e' => #(e, e'))
+  | spanningPerm : Spanning T es → List.Perm es e's → Spanning T e's
+
+def Ortho (T : DataType) (l : List Expression) : Prop :=
+  ∃ l', List.Sublist l' l ∧ Spanning T l'
 
 mutual
   inductive HasPureType : Context -> Context -> Expression -> DataType -> Prop
@@ -17,25 +66,35 @@ mutual
         HasPureType Γ (Δ ++ Δ₀) e₀ T₀ →
         HasPureType Γ (Δ ++ Δ₁) e₁ T₁ →
         HasPureType Γ (Δ ++ Δ₀ ++ Δ₁) (.pair e₀ e₁) (T₀ ⊗ T₁)
-    -- | hasTypeCtrl
+    | hasTypeCtrl (Γ Γ' Δ Δ' : Context) (l : List ((Expression × Expression) × Context)) (e : Expression) (T T' : DataType) :
+        HasMixedType (Γ ++ Δ) e T →
+        Ortho T (l.map (Prod.fst ∘ Prod.fst)) →
+        (∀ (Γⱼ : Context) (eⱼ _ : Expression), HasPureType [] Γⱼ eⱼ T) →
+        (∀ (Γⱼ : Context) (_ eⱼ' : Expression), HasPureType (Γ ++ Γ' ++ Γⱼ) (Δ ++ Δ') eⱼ' T') →
+        (∀ (x : Variable), x ∈ Context.dom Δ → Erases x T' (l.map (Prod.snd ∘ Prod.fst))) →
+        HasPureType (Γ ++ Γ') (Δ ++ Δ') (.coherentControl e T (l.map Prod.fst) T') T'
     | hasTypePureApp :
         HasProgramType f (T ⇝ T') ->
         HasPureType Γ Δ e T ->
         HasPureType Γ Δ (e ▹ f) T'
-    -- | hasTypePurePerm
+    | hasTypePurePerm :
+        HasPureType Γ Δ e T →
+        List.Perm Γ Γ' →
+        List.Perm Δ Δ' →
+        HasPureType Γ' Δ' e T
 
   inductive HasMixedType : Context -> Expression -> DataType -> Prop
   where
     | hasTypeMix : HasPureType [] Δ e T -> HasMixedType Δ e T
-    -- | hasMixedTypePerm
+    | hasMixedTypePerm : HasMixedType Δ e T → List.Perm Δ Δ' → HasMixedType Δ' e T
     | hasMixedTypePair :
         HasMixedType (Δ ++ Δ₀) e₀ T₀ →
         HasMixedType (Δ ++ Δ₁) e₁ T₁ →
-        HasMixedType (Δ ++ Δ₁ ++ Δ₂) #(e₁, e₂) (T₀ ⊗ T₁)
+        HasMixedType (Δ ++ Δ₀ ++ Δ₁) #(e₀, e₁) (T₀ ⊗ T₁)
     | hasTypeTry :
         HasMixedType Δ₀ e₀ T →
         HasMixedType Δ₁ e₁ T →
-        HasMixedType (Δ₀ ++ Δ₁) (try e₁ catch e₂) T
+        HasMixedType (Δ₀ ++ Δ₁) (try e₀ catch e₁) T
     | hasMixedTypeApp :
         HasProgramType f (T ⇛ T') →
         HasMixedType Δ e T →
@@ -60,7 +119,6 @@ mutual
         HasPureType [] (Δ ++ Δ₀) e T →
         HasMixedType Δ e' T' →
         HasProgramType (.lambda e T e') (T ⇛ T')
-
 end
 
 end Qunity
