@@ -50,8 +50,8 @@ and proofs needed for the mechanization.
 
 ## Development
 
-The project is currently moving into the formalization of Qunity's typing
-judgments.
+The project is currently moving into the formalization of the structural
+properties of the type system.
 
 ## Project Structure
 
@@ -69,7 +69,8 @@ Qunity/
 │   └── Reals.lean
 │
 └── Typing/
-    └── Context.lean
+    ├── Context.lean
+    └── Rules.lean
 ```
 
 The exact structure is expected to evolve as the formalization develops.
