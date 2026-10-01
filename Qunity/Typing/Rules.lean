@@ -69,8 +69,8 @@ mutual
     | hasTypeCtrl (Γ Γ' Δ Δ' : Context) (l : List ((Expression × Expression) × Context)) (e : Expression) (T T' : DataType) :
         HasMixedType (Γ ++ Δ) e T →
         Ortho T (l.map (Prod.fst ∘ Prod.fst)) →
-        (∀ (Γⱼ : Context) (eⱼ eⱼ' : Expression), ((eⱼ, eⱼ'), Γ) ∈ l → HasPureType [] Γⱼ eⱼ T) →
-        (∀ (Γⱼ : Context) (eⱼ eⱼ' : Expression), ((eⱼ, eⱼ'), Γ) ∈ l → HasPureType (Γ ++ Γ' ++ Γⱼ) (Δ ++ Δ') eⱼ' T') →
+        (∀ (Γⱼ : Context) (eⱼ eⱼ' : Expression), ((eⱼ, eⱼ'), Γⱼ) ∈ l → HasPureType [] Γⱼ eⱼ T) →
+        (∀ (Γⱼ : Context) (eⱼ eⱼ' : Expression), ((eⱼ, eⱼ'), Γⱼ) ∈ l → HasPureType (Γ ++ Γ' ++ Γⱼ) (Δ ++ Δ') eⱼ' T') →
         (∀ (x : Variable), x ∈ Context.dom Δ → Erases x T' (l.map (Prod.snd ∘ Prod.fst))) →
         HasPureType (Γ ++ Γ') (Δ ++ Δ') (.coherentControl e T (l.map Prod.fst) T') T'
     | hasTypePureApp :
