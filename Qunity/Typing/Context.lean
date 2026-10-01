@@ -1,4 +1,5 @@
 import Mathlib.Data.Finset.Basic
+import Mathlib.Data.Finset.Dedup
 import Qunity.Language.Types
 
 namespace Qunity
@@ -30,7 +31,7 @@ inductive Context.WellFormed : Context -> Prop where
   | nil : WellFormed []
   | cons : WellFormed Γ → x ∉ dom Γ → WellFormed ((x, T) :: Γ)
 
-theorem Context.well_formed_iff_variables_distinct :
+lemma Context.well_formed_iff_variables_distinct :
   Context.WellFormed Γ ↔ (Γ.map Prod.fst).Nodup := by induction Γ with
     | nil =>
       constructor <;> intro _
@@ -71,4 +72,19 @@ theorem Context.concatenation_well_formed_iff_disjoint :
     · constructor
       · exact well_formed_iff_variables_distinct.mp hΓ₂
       · exact hDisjoint
+
+theorem Context.permutation_preserves_well_formedness (h : Γ₁.Perm Γ₂) :
+  WellFormed Γ₁ ↔ WellFormed Γ₂ := by
+  rw [well_formed_iff_variables_distinct, well_formed_iff_variables_distinct]
+  exact (h.map Prod.fst).nodup_iff
+
+theorem Context.permutation_preserves_dom (h : Γ₁.Perm Γ₂) :
+  Context.dom Γ₁ = Context.dom Γ₂ := by
+  unfold Context.dom
+  exact List.toFinset_eq_of_perm _ _ (h.map Prod.fst)
+
+theorem Context.permutation_preserves_dom_membership (h : Γ₁.Perm Γ₂) :
+  x ∈ Context.dom Γ₁ ↔ x ∈ Context.dom Γ₂ := by
+  rw [mem_dom_iff_in_context, mem_dom_iff_in_context]
+  exact (h.map Prod.fst).mem_iff
 end Qunity
