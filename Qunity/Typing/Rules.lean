@@ -57,16 +57,22 @@ def Ortho (T : DataType) (l : List Expression) : Prop :=
   ∃ l', List.Sublist l' l ∧ Spanning T l'
 
 mutual
+  open Context
+
   inductive HasPureType : Context -> Context -> Expression -> DataType -> Prop
   where
-    | hasTypeUnit : HasPureType Γ [] .unit .unit
-    | hasTypeCVar : HasPureType (Γ₁ ++ [(x, T)] ++ Γ₂) [] (.var x) T
-    | hasTypeQVar : x ∉ Γ.dom → HasPureType Γ [(x, T)] (.var x) T
+    | hasTypeUnit : WellFormed Γ → HasPureType Γ [] .unit .unit
+    | hasTypeCVar : WellFormed (Γ₁ ++ [(x, T)] ++ Γ₂) →
+        HasPureType (Γ₁ ++ [(x, T)] ++ Γ₂) [] (.var x) T
+    | hasTypeQVar : WellFormed Γ → x ∉ Γ.dom → HasPureType Γ [(x, T)] (.var x) T
     | hasTypePurePair :
+        WellFormed Γ →
+        WellFormed (Δ ++ Δ₀ ++ Δ₁) →
         HasPureType Γ (Δ ++ Δ₀) e₀ T₀ →
         HasPureType Γ (Δ ++ Δ₁) e₁ T₁ →
         HasPureType Γ (Δ ++ Δ₀ ++ Δ₁) (.pair e₀ e₁) (T₀ ⊗ T₁)
     | hasTypeCtrl (Γ Γ' Δ Δ' : Context) (l : List ((Expression × Expression) × Context)) (e : Expression) (T T' : DataType) :
+        WellFormed (Γ ++ Γ' ++ Δ ++ Δ') →
         HasMixedType (Γ ++ Δ) e T →
         Ortho T (l.map (Prod.fst ∘ Prod.fst)) →
         (∀ (Γⱼ : Context) (eⱼ eⱼ' : Expression), ((eⱼ, eⱼ'), Γⱼ) ∈ l → HasPureType [] Γⱼ eⱼ T) →
@@ -78,6 +84,8 @@ mutual
         HasPureType Γ Δ e T ->
         HasPureType Γ Δ (e ▹ f) T'
     | hasTypePurePerm :
+        WellFormed Γ' →
+        WellFormed Δ' →
         HasPureType Γ Δ e T →
         List.Perm Γ Γ' →
         List.Perm Δ Δ' →
@@ -85,13 +93,19 @@ mutual
 
   inductive HasMixedType : Context -> Expression -> DataType -> Prop
   where
-    | hasTypeMix : HasPureType [] Δ e T -> HasMixedType Δ e T
-    | hasMixedTypePerm : HasMixedType Δ e T → List.Perm Δ Δ' → HasMixedType Δ' e T
+    | hasTypeMix : WellFormed Δ → HasPureType [] Δ e T -> HasMixedType Δ e T
+    | hasMixedTypePerm :
+        WellFormed Δ' →
+        HasMixedType Δ e T →
+        List.Perm Δ Δ' →
+        HasMixedType Δ' e T
     | hasMixedTypePair :
+        WellFormed (Δ ++ Δ₀ ++ Δ₁) →
         HasMixedType (Δ ++ Δ₀) e₀ T₀ →
         HasMixedType (Δ ++ Δ₁) e₁ T₁ →
         HasMixedType (Δ ++ Δ₀ ++ Δ₁) #(e₀, e₁) (T₀ ⊗ T₁)
     | hasTypeTry :
+        WellFormed (Δ₀ ++ Δ₁) →
         HasMixedType Δ₀ e₀ T →
         HasMixedType Δ₁ e₁ T →
         HasMixedType (Δ₀ ++ Δ₁) (try e₀ catch e₁) T
@@ -120,5 +134,27 @@ mutual
         HasMixedType Δ e' T' →
         HasProgramType (.lambda e T e') (T ⇛ T')
 end
+
+open Context
+
+theorem HasPureType.context_well_formed (h : HasPureType Γ Δ e T) :
+  (Γ ++ Δ).WellFormed := by
+  cases h with
+  | hasTypeUnit hΓ => sorry
+  | hasTypeCVar hΓ => sorry
+  | hasTypeQVar hΓ => sorry
+  | hasTypePurePair hΓ hΓ₁ => sorry
+  | hasTypeCtrl Γ Γ' Δ Δ' _ _ _ _ hΓΔ => sorry
+  | hasTypePureApp => sorry
+  | hasTypePurePerm => sorry
+
+theorem HasMixedType.context_well_formed (h : HasMixedType Δ e T) :
+  Δ.WellFormed := by
+  cases h with
+  | hasTypeMix => sorry
+  | hasMixedTypePerm => sorry
+  | hasMixedTypePair => sorry
+  | hasTypeTry => sorry
+  | hasMixedTypeApp => sorry
 
 end Qunity
