@@ -21,7 +21,7 @@ lemma Context.dom_cons : Context.dom ((x, T) :: Γ) = insert x (Context.dom Γ) 
 
 @[simp]
 lemma Context.mem_dom_iff_in_context (x : Variable) (Γ : Context) :
-    x ∈ Context.dom Γ ↔ x ∈ Γ.map Prod.fst := by
+  x ∈ Context.dom Γ ↔ x ∈ Γ.map Prod.fst := by
   simp [Context.dom]
 
 def Context.Disjoint (Γ₁ Γ₂ : Context) : Prop :=

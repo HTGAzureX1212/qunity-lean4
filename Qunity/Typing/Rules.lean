@@ -137,24 +137,57 @@ end
 
 open Context
 
-theorem HasPureType.context_well_formed (h : HasPureType Γ Δ e T) :
-  (Γ ++ Δ).WellFormed := by
-  cases h with
-  | hasTypeUnit hΓ => sorry
-  | hasTypeCVar hΓ => sorry
-  | hasTypeQVar hΓ => sorry
-  | hasTypePurePair hΓ hΓ₁ => sorry
-  | hasTypeCtrl Γ Γ' Δ Δ' _ _ _ _ hΓΔ => sorry
-  | hasTypePureApp => sorry
-  | hasTypePurePerm => sorry
+lemma disjoint_of_shared_prefix {Γ A B C : Context}
+    (dAB : Disjoint Γ (A ++ B))
+    (dAC : Disjoint Γ (A ++ C)) :
+    Disjoint Γ (A ++ B ++ C) := by
+  simp only [Context.Disjoint] at dAB dAC ⊢
+  intro x hx hmem
+  rw [List.map_append, List.mem_append] at hmem
+  cases hmem with
+  | inl hmem => exact dAB hx hmem
+  | inr hmem =>
+    exact dAC hx (by
+      rw [List.map_append, List.mem_append]
+      exact Or.inr hmem)
 
-theorem HasMixedType.context_well_formed (h : HasMixedType Δ e T) :
-  Δ.WellFormed := by
-  cases h with
-  | hasTypeMix => sorry
-  | hasMixedTypePerm => sorry
-  | hasMixedTypePair => sorry
-  | hasTypeTry => sorry
-  | hasMixedTypeApp => sorry
+mutual
+  theorem HasPureType.context_well_formed (h : HasPureType Γ Δ e T) :
+      (Γ ++ Δ).WellFormed :=
+    match h with
+    | .hasTypeUnit hΓ => by simpa using hΓ
+    | .hasTypeCVar hΓ => by simpa using hΓ
+    | .hasTypeQVar hΓ hx => by
+        rename_i x
+        have hw : WellFormed ((x, T) :: Γ) := WellFormed.cons hΓ hx
+        have hp : ((x, T) :: Γ).Perm (Γ ++ [(x, T)]) := by
+          change ([(x, T)] ++ Γ).Perm (Γ ++ [(x, T)])
+          exact List.perm_append_comm
+        exact (permutation_preserves_well_formedness hp).mp hw
+    | .hasTypePurePair hΓ hΔ h₀ h₁ =>
+        concatenation_well_formed_iff_disjoint.mpr ⟨hΓ, hΔ,
+          disjoint_of_shared_prefix
+            (concatenation_well_formed_iff_disjoint.mp
+              (HasPureType.context_well_formed h₀)).2.2
+            (concatenation_well_formed_iff_disjoint.mp
+              (HasPureType.context_well_formed h₁)).2.2⟩
+    | .hasTypeCtrl _ _ _ _ _ _ _ _ hWF _ _ _ _ _ => by
+        rw [← List.append_assoc]
+        exact hWF
+    | .hasTypePureApp _ he =>
+        HasPureType.context_well_formed he
+    | .hasTypePurePerm _ _ he hpermΓ hpermΔ =>
+        (permutation_preserves_well_formedness (hpermΓ.append hpermΔ)).mp
+          (HasPureType.context_well_formed he)
+    termination_by structural h
+
+  theorem HasMixedType.context_well_formed (h : HasMixedType Δ e T) :
+      Δ.WellFormed :=
+    match h with
+    | .hasTypeMix hΔ _ | .hasMixedTypePerm hΔ _ _
+    | .hasMixedTypePair hΔ _ _ | .hasTypeTry hΔ _ _ => hΔ
+    | .hasMixedTypeApp _ he => HasMixedType.context_well_formed he
+    termination_by structural h
+end
 
 end Qunity
