@@ -137,20 +137,6 @@ end
 
 open Context
 
-lemma disjoint_of_shared_prefix {Γ A B C : Context}
-    (dAB : Disjoint Γ (A ++ B))
-    (dAC : Disjoint Γ (A ++ C)) :
-    Disjoint Γ (A ++ B ++ C) := by
-  simp only [Context.Disjoint] at dAB dAC ⊢
-  intro x hx hmem
-  rw [List.map_append, List.mem_append] at hmem
-  cases hmem with
-  | inl hmem => exact dAB hx hmem
-  | inr hmem =>
-    exact dAC hx (by
-      rw [List.map_append, List.mem_append]
-      exact Or.inr hmem)
-
 mutual
   theorem HasPureType.context_well_formed (h : HasPureType Γ Δ e T) :
       (Γ ++ Δ).WellFormed :=
@@ -166,7 +152,7 @@ mutual
         exact (permutation_preserves_well_formedness hp).mp hw
     | .hasTypePurePair hΓ hΔ h₀ h₁ =>
         concatenation_well_formed_iff_disjoint.mpr ⟨hΓ, hΔ,
-          disjoint_of_shared_prefix
+          disjoint_of_shared_prefix_concatenation
             (concatenation_well_formed_iff_disjoint.mp
               (HasPureType.context_well_formed h₀)).2.2
             (concatenation_well_formed_iff_disjoint.mp
@@ -189,5 +175,38 @@ mutual
     | .hasMixedTypeApp _ he => HasMixedType.context_well_formed he
     termination_by structural h
 end
+
+theorem HasPureType.context_permutation_invariant (hΓ : Γ₁.Perm Γ₂) (hΔ : Δ₁.Perm Δ₂) :
+    HasPureType Γ₁ Δ₁ e T ↔ HasPureType Γ₂ Δ₂ e T := by
+  constructor <;> intro h
+  · rcases concatenation_well_formed_iff_disjoint.mp
+      (HasPureType.context_well_formed h) with ⟨hΓWF, hΔWF, _⟩
+    exact .hasTypePurePerm
+      ((permutation_preserves_well_formedness hΓ).mp hΓWF)
+      ((permutation_preserves_well_formedness hΔ).mp hΔWF)
+      h hΓ hΔ
+  · rcases concatenation_well_formed_iff_disjoint.mp
+      (HasPureType.context_well_formed h) with
+      ⟨hΓWF, hΔWF, _⟩
+    exact .hasTypePurePerm
+      ((permutation_preserves_well_formedness hΓ).mpr hΓWF)
+      ((permutation_preserves_well_formedness hΔ).mpr hΔWF)
+      h hΓ.symm hΔ.symm
+
+theorem HasMixedType.context_permutation_disjoint (hΔ : Δ₁.Perm Δ₂) :
+    HasMixedType Δ₁ e T ↔ HasMixedType Δ₂ e T := by
+  constructor <;> intro h
+  · exact .hasMixedTypePerm
+      ((permutation_preserves_well_formedness hΔ).mp
+        (HasMixedType.context_well_formed h))
+      h hΔ
+  · exact .hasMixedTypePerm
+      ((permutation_preserves_well_formedness hΔ).mpr
+        (HasMixedType.context_well_formed h))
+      h hΔ.symm
+
+theorem HasPureType.contexts_disjoint (h : HasPureType Γ Δ e T) :
+    Context.Disjoint Γ Δ := by
+  exact (concatenation_well_formed_iff_disjoint.mp (HasPureType.context_well_formed h)).2.2
 
 end Qunity

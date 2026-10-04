@@ -1,5 +1,6 @@
 import Mathlib.Data.Finset.Basic
 import Mathlib.Data.Finset.Dedup
+import Mathlib.Data.List.Permutation
 import Qunity.Language.Types
 
 namespace Qunity
@@ -49,6 +50,40 @@ lemma Context.well_formed_iff_variables_distinct :
         apply WellFormed.cons
         exact ih.mpr hΓ
         simpa using hx
+
+lemma Context.disjoint_of_shared_prefix_concatenation {Γ A B C : Context}
+    (dAB : Disjoint Γ (A ++ B))
+    (dAC : Disjoint Γ (A ++ C)) :
+    Disjoint Γ (A ++ B ++ C) := by
+  simp only [Disjoint] at dAB dAC ⊢
+  intro x hx hmem
+  rw [List.map_append, List.mem_append] at hmem
+  cases hmem with
+  | inl hmem => exact dAB hx hmem
+  | inr hmem =>
+    exact dAC hx (by
+      rw [List.map_append, List.mem_append]
+      exact Or.inr hmem)
+
+@[simp]
+lemma Context.permutation_nil : Γ.Perm [] ↔ Γ = [] := by
+  exact List.perm_nil
+
+@[simp]
+lemma Context.nil_permutation : [].Perm Γ ↔ Γ = [] := by
+  exact List.nil_perm
+
+@[simp]
+lemma Context.permutation_singleton : Γ.Perm [a] ↔ Γ = [a] := by
+  exact List.perm_singleton
+
+@[simp]
+lemma Context.singleton_permutation : [a].Perm Γ ↔ [a] = Γ := by
+  exact List.singleton_perm
+
+@[simp]
+lemma perm_pair_iff : Γ.Perm [a, b] ↔ Γ = [a, b] ∨ Γ = [b, a] := by
+  exact List.perm_pair
 
 theorem Context.concatenation_well_formed_iff_disjoint :
   WellFormed (Γ₁ ++ Γ₂) ↔ WellFormed Γ₁ ∧ WellFormed Γ₂ ∧ Disjoint Γ₁ Γ₂ := by

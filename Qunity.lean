@@ -6,4 +6,5 @@ import Qunity.Language.Syntax
 import Qunity.Language.SyntaxSugar
 import Qunity.Math.Reals
 import Qunity.Typing.Context
+import Qunity.Typing.Inversion
 import Qunity.Typing.Rules
