@@ -12,10 +12,10 @@ inductive ProgramType
   | quantumChannel (A B : DataType)
 deriving DecidableEq
 
-infixr:50 " ⊕ " => DataType.sum
-infixr:50 " ⊗ " => DataType.product
+infixr:60 " ⊕ " => DataType.sum
+infixr:80 " ⊗ " => DataType.product
 
-infixr:50 " ⇝ " => ProgramType.coherentMap
-infixr:50 " ⇛ " => ProgramType.quantumChannel
+infixr:60 " ⇝ " => ProgramType.coherentMap
+infixr:60 " ⇛ " => ProgramType.quantumChannel
 
 end Qunity
