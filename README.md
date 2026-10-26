@@ -50,8 +50,7 @@ and proofs needed for the mechanization.
 
 ## Development
 
-The project is currently moving into the formalization of the structural
-properties of the type system.
+The project is currently moving into the formalization of semantics.
 
 ## Project Structure
 
@@ -68,8 +67,11 @@ Qunity/
 ├── Math/
 │   └── Reals.lean
 │
+├── Semantics/
+│
 └── Typing/
     ├── Context.lean
+    ├── Inversion.lean
     └── Rules.lean
 ```
 

@@ -59,6 +59,18 @@ def Ortho (T : DataType) (l : List Expression) : Prop :=
 mutual
   open Context
 
+  inductive Branches :
+      Context → Context → Context → Context →
+      List ((Expression × Expression) × Context) → DataType → DataType → Prop
+   where
+    | nil (Γ Γ' Δ Δ' : Context) (T T' : DataType) :
+        Branches Γ Γ' Δ Δ' [] T T'
+    | cons {Γ Γ' Δ Δ' Γⱼ eⱼ eⱼ' l T T'} :
+        HasPureType [] Γⱼ eⱼ T →
+        HasPureType (Γ ++ Γ' ++ Γⱼ) (Δ ++ Δ') eⱼ' T' →
+        Branches Γ Γ' Δ Δ' l T T' →
+        Branches Γ Γ' Δ Δ' (((eⱼ, eⱼ'), Γⱼ) :: l) T T'
+
   inductive HasPureType : Context -> Context -> Expression -> DataType -> Prop
   where
     | hasTypeUnit : WellFormed Γ → HasPureType Γ [] .unit .unit
@@ -71,13 +83,13 @@ mutual
         HasPureType Γ (Δ ++ Δ₀) e₀ T₀ →
         HasPureType Γ (Δ ++ Δ₁) e₁ T₁ →
         HasPureType Γ (Δ ++ Δ₀ ++ Δ₁) (.pair e₀ e₁) (T₀ ⊗ T₁)
-    | hasTypeCtrl (Γ Γ' Δ Δ' : Context) (l : List ((Expression × Expression) × Context)) (e : Expression) (T T' : DataType) :
+    | hasTypeCtrl (Γ Γ' Δ Δ' : Context) (l : List ((Expression × Expression) × Context))
+        (e : Expression) (T T' : DataType) :
         WellFormed (Γ ++ Γ' ++ Δ ++ Δ') →
         HasMixedType (Γ ++ Δ) e T →
         Ortho T (l.map (Prod.fst ∘ Prod.fst)) →
-        (∀ (Γⱼ : Context) (eⱼ eⱼ' : Expression), ((eⱼ, eⱼ'), Γⱼ) ∈ l → HasPureType [] Γⱼ eⱼ T) →
-        (∀ (Γⱼ : Context) (eⱼ eⱼ' : Expression), ((eⱼ, eⱼ'), Γⱼ) ∈ l → HasPureType (Γ ++ Γ' ++ Γⱼ) (Δ ++ Δ') eⱼ' T') →
-        (∀ (x : Variable), x ∈ Context.dom Δ → Erases x T' (l.map (Prod.snd ∘ Prod.fst))) →
+        Branches Γ Γ' Δ Δ' l T T' →
+        (∀ x, x ∈ Context.dom Δ → Erases x T' (l.map (Prod.snd ∘ Prod.fst))) →
         HasPureType (Γ ++ Γ') (Δ ++ Δ') (.coherentControl e T (l.map Prod.fst) T') T'
     | hasTypePureApp :
         HasProgramType f (T ⇝ T') ->
@@ -157,7 +169,7 @@ mutual
               (HasPureType.context_well_formed h₀)).2.2
             (concatenation_well_formed_iff_disjoint.mp
               (HasPureType.context_well_formed h₁)).2.2⟩
-    | .hasTypeCtrl _ _ _ _ _ _ _ _ hWF _ _ _ _ _ => by
+    | .hasTypeCtrl _ _ _ _ _ _ _ _ hWF _ _ __ _ => by
         rw [← List.append_assoc]
         exact hWF
     | .hasTypePureApp _ he =>

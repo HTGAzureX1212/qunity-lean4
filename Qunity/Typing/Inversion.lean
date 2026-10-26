@@ -80,26 +80,24 @@ theorem HasPureType.ctrl_inverse (h : HasPureType Γ Δ e T) :
         WellFormed (Γ₀ ++ Γ' ++ Δ₀ ++ Δ') ∧
         HasMixedType (Γ₀ ++ Δ₀) e_c Tctrl ∧
         Ortho Tctrl (l.map (Prod.fst ∘ Prod.fst)) ∧
-        (∀ Γⱼ eⱼ eⱼ', ((eⱼ, eⱼ'), Γⱼ) ∈ l → HasPureType [] Γⱼ eⱼ Tctrl) ∧
-        (∀ Γⱼ eⱼ eⱼ', ((eⱼ, eⱼ'), Γⱼ) ∈ l →
-          HasPureType (Γ₀ ++ Γ' ++ Γⱼ) (Δ₀ ++ Δ') eⱼ' Tret) ∧
+        Branches Γ₀ Γ' Δ₀ Δ' l Tctrl Tret ∧
         (∀ x, x ∈ Context.dom Δ₀ →
           Erases x Tret (l.map (Prod.snd ∘ Prod.fst))) :=
   match h with
-  | .hasTypeCtrl Γ₀ Γ₁ Δ₀ Δ₁ l _ _ _ hWF hMix hOrtho hPat hBod hErase => by
-    intro he
-    cases he
-    exact ⟨rfl, Γ₀, Γ₁, Δ₀, Δ₁, l, .refl _, .refl _, rfl, hWF, hMix, hOrtho, hPat, hBod, hErase⟩
+  | .hasTypeCtrl Γ₀ Γ₁ Δ₀ Δ₁ l _ _ _ hWF hMix hOrtho b hErase => by
+      intro he
+      cases he
+      exact ⟨rfl, Γ₀, Γ₁, Δ₀, Δ₁, l, .refl _, .refl _, rfl, hWF, hMix, hOrtho, b, hErase⟩
   | .hasTypeUnit _ | .hasTypeCVar _ | .hasTypeQVar ..
   | .hasTypePurePair .. | .hasTypePureApp .. => by
-    intro he
-    nomatch he
+      intro he
+      nomatch he
   | .hasTypePurePerm _ _ h hΓperm hΔperm => by
-    intro he
-    obtain ⟨rfl, Γ₀, Γ₁, Δ₀, Δ₁, l, hΓsplit, hΔsplit, rfl, hWF, hMix, hOrtho,
-        hPat, hBod, hErase⟩ := ctrl_inverse h he
-    exact ⟨rfl, Γ₀, Γ₁, Δ₀, Δ₁, l, hΓperm.symm.trans hΓsplit, hΔperm.symm.trans hΔsplit, rfl,
-        hWF, hMix, hOrtho, hPat, hBod, hErase⟩
+      intro he
+      obtain ⟨rfl, Γ₀, Γ₁, Δ₀, Δ₁, l, hΓsplit, hΔsplit, rfl, hWF, hMix, hOrtho, b, hErase⟩ :=
+        ctrl_inverse h he
+      exact ⟨rfl, Γ₀, Γ₁, Δ₀, Δ₁, l, hΓperm.symm.trans hΓsplit, hΔperm.symm.trans hΔsplit, rfl,
+        hWF, hMix, hOrtho, b, hErase⟩
 
 theorem HasPureType.application_inverse (h : HasPureType Γ Δ e T') :
     e = .application f arg →
@@ -242,29 +240,26 @@ theorem HasMixedType.ctrl_inverse (h : HasMixedType Δ e T) :
         branches = l.map Prod.fst ∧
         HasMixedType Δ₀ e_c Tctrl ∧
         Ortho Tctrl (l.map (Prod.fst ∘ Prod.fst)) ∧
-        (∀ Γⱼ eⱼ eⱼ', ((eⱼ, eⱼ'), Γⱼ) ∈ l → HasPureType [] Γⱼ eⱼ Tctrl) ∧
-        (∀ Γⱼ eⱼ eⱼ', ((eⱼ, eⱼ'), Γⱼ) ∈ l →
-          HasPureType Γⱼ (Δ₀ ++ Δ₁) eⱼ' Tret) ∧
+        Branches [] [] Δ₀ Δ₁ l Tctrl Tret ∧
         (∀ x, x ∈ Context.dom Δ₀ →
           Erases x Tret (l.map (Prod.snd ∘ Prod.fst))) :=
   match h with
   | .hasTypeMix _ hp => by
       intro he
-      obtain ⟨rfl, Γ₀, Γ₁, Δ₀, Δ₁, l, hΓsplit, hΔsplit, rfl, _, hMix, hOrtho,
-          hPat, hBod, hErase⟩ := HasPureType.ctrl_inverse hp he
+      obtain ⟨rfl, Γ₀, Γ₁, Δ₀, Δ₁, l, hΓsplit, hΔsplit, rfl, _, hMix, hOrtho, b, hErase⟩ :=
+        HasPureType.ctrl_inverse hp he
       obtain ⟨hΓ₀, hΓ₁⟩ := List.append_eq_nil_iff.mp (nil_permutation.mp hΓsplit)
       subst hΓ₀
       subst hΓ₁
-      exact ⟨rfl, Δ₀, Δ₁, l, hΔsplit, rfl, hMix, hOrtho, hPat, hBod, hErase⟩
+      exact ⟨rfl, Δ₀, Δ₁, l, hΔsplit, rfl, hMix, hOrtho, b, hErase⟩
   | .hasMixedTypePair .. | .hasTypeTry .. | .hasMixedTypeApp .. => by
       intro he
       nomatch he
   | .hasMixedTypePerm _ h hperm => by
       intro he
-      obtain ⟨rfl, Δ₀, Δ₁, l, hsplit, rfl, hMix, hOrtho, hPat, hBod, hErase⟩ :=
+      obtain ⟨rfl, Δ₀, Δ₁, l, hsplit, rfl, hMix, hOrtho, b, hErase⟩ :=
         ctrl_inverse h he
-      exact ⟨rfl, Δ₀, Δ₁, l, hperm.symm.trans hsplit, rfl, hMix, hOrtho, hPat,
-        hBod, hErase⟩
+      exact ⟨rfl, Δ₀, Δ₁, l, hperm.symm.trans hsplit, rfl, hMix, hOrtho, b, hErase⟩
 
 theorem HasProgramType.gate_inverse (h : HasProgramType f F) :
     f = .u₃ θ φ ρ → F = (Bit ⇝ Bit) ∨ F = (Bit ⇛ Bit) :=

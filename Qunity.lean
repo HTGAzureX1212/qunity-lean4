@@ -4,7 +4,10 @@
 import Qunity.Language.Types
 import Qunity.Language.Syntax
 import Qunity.Language.SyntaxSugar
+import Qunity.Math.List
 import Qunity.Math.Reals
+import Qunity.Semantics.Assignment
+import Qunity.Semantics.Valuation
 import Qunity.Typing.Context
 import Qunity.Typing.Inversion
 import Qunity.Typing.Rules
