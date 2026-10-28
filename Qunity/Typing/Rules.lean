@@ -60,9 +60,9 @@ mutual
   open Context
 
   inductive Branches :
-      Context → Context → Context → Context →
-      List ((Expression × Expression) × Context) → DataType → DataType → Prop
-   where
+    Context → Context → Context → Context →
+    List ((Expression × Expression) × Context) → DataType → DataType → Prop
+  where
     | nil (Γ Γ' Δ Δ' : Context) (T T' : DataType) :
         Branches Γ Γ' Δ Δ' [] T T'
     | cons {Γ Γ' Δ Δ' Γⱼ eⱼ eⱼ' l T T'} :
