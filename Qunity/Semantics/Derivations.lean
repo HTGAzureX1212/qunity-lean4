@@ -307,4 +307,46 @@ mutual
     termination_by structural h
 end
 
+mutual
+  def PureDerivation.depth {Γ Δ e T} :
+      PureDerivation Γ Δ e T → Nat
+    | .hasTypeUnit _ | .hasTypeCVar _ | .hasTypeQVar .. => 0
+    | .hasTypePurePair _ _ d₀ d₁ => Nat.succ (max d₀.depth d₁.depth)
+    | .hasTypeCtrl _ _ _ _ _ _ _ _ _ dMix _ dB _ =>
+        Nat.succ (max dMix.depth dB.depth)
+    | .hasTypePureApp df de => Nat.succ (max df.depth de.depth)
+    | .hasTypePurePerm _ _ d _ _ => Nat.succ d.depth
+
+  def MixedDerivation.depth {Δ e T} :
+      MixedDerivation Δ e T → Nat
+    | .hasTypeMix _ dp => Nat.succ dp.depth
+    | .hasMixedTypePerm _ d _ => Nat.succ d.depth
+    | .hasMixedTypePair _ d₀ d₁ => Nat.succ (max d₀.depth d₁.depth)
+    | .hasTypeTry _ d₀ d₁ => Nat.succ (max d₀.depth d₁.depth)
+    | .hasMixedTypeApp df de => Nat.succ (max df.depth de.depth)
+
+  def ProgramDerivation.depth {f F} :
+      ProgramDerivation f F → Nat
+    | .hasTypeGate | .hasTypeLeft | .hasTypeRight => 0
+    | .hasCoherentTypeAbs dp dq => Nat.succ (max dp.depth dq.depth)
+    | .hasTypeRphase dp => Nat.succ dp.depth
+    | .hasTypeChannel df => Nat.succ df.depth
+    | .hasChannelTypeAbs dp dm => Nat.succ (max dp.depth dm.depth)
+
+  def BranchDerivation.depth {Γ Γ' Δ Δ' l T T'} :
+      BranchDerivation Γ Γ' Δ Δ' l T T' → Nat
+    | .nil .. => 0
+    | .cons dp dq b => Nat.succ (max (max dp.depth dq.depth) b.depth)
+end
+
+example
+    {Δ : Context} {e e' : Expression}
+    {T T' : DataType}
+    (dp : PureDerivation [] Δ e T)
+    (dq : PureDerivation [] Δ e' T') :
+    dq.depth <
+      (ProgramDerivation.hasCoherentTypeAbs dp dq).depth := by
+  change dq.depth < Nat.succ (max dp.depth dq.depth)
+  exact Nat.lt_succ_of_le (Nat.le_max_right _ _)
+
 end Qunity

@@ -7,6 +7,8 @@ import Qunity.Language.SyntaxSugar
 import Qunity.Math.List
 import Qunity.Math.Reals
 import Qunity.Semantics.Assignment
+import Qunity.Semantics.Denotations
+import Qunity.Semantics.Derivations
 import Qunity.Semantics.Valuation
 import Qunity.Typing.Context
 import Qunity.Typing.Inversion

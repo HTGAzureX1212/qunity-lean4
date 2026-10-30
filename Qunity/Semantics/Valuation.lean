@@ -23,10 +23,20 @@ def Value.enum : (T : DataType) → List (Value T)
   | .product A B =>
       ((enum A).product (enum B)).map fun (v, w) => .pair v w
 
+def Value.unpair
+    (v : Value (A ⊗ B)) : Value A × Value B :=
+  match v with
+  | .pair v₀ v₁ => (v₀, v₁)
+
 def Valuation.enum : (Γ : Context) → List (Valuation Γ)
   | [] => [.nil]
   | (_, T) :: Γ =>
       (Value.enum T).flatMap fun v => (enum Γ).map fun τ => .cons v τ
+
+def Valuation.singleton
+    (τ : Valuation [(x, T)]) : Value T :=
+  match τ with
+  | .cons v .nil => v
 
 theorem Value.mem_enum : ∀ {T} (v : Value T), v ∈ enum T
   | .unit, .unit => by simp [enum]
