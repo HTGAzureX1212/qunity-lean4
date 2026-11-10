@@ -158,7 +158,7 @@ lemma well_typed_well_defined_semantics_base_case : AmplitudeUniqueUpTo 0 where
       rcases h2 with
         ⟨he', _, _, _, _⟩ |
         ⟨_, _, x', he', _, _, _, _⟩ |
-        ⟨_, he', _, _, _, _⟩
+        ⟨x', he', hΔ', hΓ', hx', hEq₂⟩
       · cases he; cases he'
       · have hxx : x = x' := by
           have h : Expression.var x = Expression.var x' :=
@@ -181,14 +181,30 @@ lemma well_typed_well_defined_semantics_base_case : AmplitudeUniqueUpTo 0 where
               d₁.cvar_amplitude_of_depth_zero (Nat.eq_zero_of_le_zero hd₁) rfl rfl hx σ .nil v
           _ = pureAmplitude d₂ σ .nil v :=
             (d₂.cvar_amplitude_of_depth_zero (Nat.eq_zero_of_le_zero hd₂) rfl rfl hx σ .nil v).symm
-      · sorry
-    · -- qvar
-      rcases h2 with ⟨he', _, _, _, _⟩ |
-        ⟨_, _, _, he', _, _, _, _⟩ |
+      · have hImpossible : ([] : Context) = [(x', T)] := hΔ.symm.trans hΔ'
+        simp at hImpossible
+    · -- QVar
+      rcases h2 with
+        ⟨he', _, _, _, _⟩ |
+        ⟨Γ₁', Γ₂', x', he', hΔ', hΓeq', hΓ', hEq₂⟩ |
         ⟨x', he', hΔ', hΓ', hx', hEq₂⟩
-      · cases he; cases he'
-      · sorry
-      · sorry
+      · -- QVar / Unit
+        have hImpossible : Expression.var x = Expression.unit :=
+          he.symm.trans he'
+        cases hImpossible
+      · -- QVar / CVar
+        have hImpossible : [(x, T)] = ([] : Context) :=
+          hΔ.symm.trans hΔ'
+        simp at hImpossible
+      · -- QVar / QVar
+        have hxx : x = x' := by injection (he.symm.trans he') with hxx
+        subst x'
+        subst e
+        subst Δ
+        cases hEq
+        cases hEq₂
+        cases τ
+        simp [pureAmplitude]
   mixed := by sorry
   prog := by sorry
   branch := by sorry
