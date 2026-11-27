@@ -9,22 +9,6 @@ namespace Qunity
 
 /-- Two valuations agree when they assign the same value to every `(x, S)`
 present in both of their contexts. -/
-def Valuation.Agreed {Γ₁ Γ₂ : Context}
-    (σ₁ : Valuation Γ₁) (σ₂ : Valuation Γ₂) : Prop :=
-  ∀ ⦃x : Variable⦄ ⦃S : DataType⦄, (x, S) ∈ Γ₁ → (x, S) ∈ Γ₂ →
-    lookup σ₁ x S = lookup σ₂ x S
-
-theorem Valuation.Agreed.refl {Γ : Context} (σ : Valuation Γ) : σ.Agreed σ :=
-  fun _ _ _ _ => rfl
-
-/-! ## Groundwork lemmas about `lookup`, `split`, `append`, `reorder`
-
-These are the elementary facts that make the agreement hypotheses of the
-successor step provable.  Each is an induction over the valuation (and, for
-`reorder`, via the `Assignment` round-trip in `Qunity.Semantics.Assignment`).
--/
-
-/-- Looking up in an appended valuation, left part. -/
 theorem Valuation.lookup_append_left {Γ Δ : Context}
     (σ : Valuation Γ) (τ : Valuation Δ) :
     ∀ ⦃x : Variable⦄ ⦃S : DataType⦄, (x, S) ∈ Γ →
@@ -146,17 +130,6 @@ theorem Valuation.lookup_reorder {Γ Γ' : Context} :
   rw [option_some_get_eq (Valuation.lookup σ x S)
     (Valuation.lookup_isSome σ (h.symm.mem_iff.mpr h₁))]
 
-/-- A singleton valuation is the lookup of its only variable. -/
-theorem Valuation.singleton_eq_lookup {x : Variable} {T : DataType}
-    (τ : Valuation [(x, T)]) :
-    some τ.singleton = lookup τ x T := by
-  cases τ with
-  | cons v τ' =>
-      cases τ'
-      simp [singleton, Valuation.lookup]
-
-/-- Looking up is invariant under transporting the context along an equality
-of contexts. -/
 theorem Valuation.lookup_typeCast {Γ Γ' : Context}
     (τ : Valuation Γ) (h : Γ = Γ') (x : Variable) (S : DataType) :
     Valuation.lookup (h ▸ τ) x S = Valuation.lookup τ x S := by
@@ -171,106 +144,6 @@ theorem Valuation.lookup_append_assoc {Δ Δ₀ Δ₁ : Context}
       = Valuation.lookup τ x S :=
   Valuation.lookup_typeCast τ (List.append_assoc Δ Δ₀ Δ₁) x S
 
-/- **Not needed (and false in general).**  The identity
-`(σ.append τ).reorder h = (σ.reorder h₁).append (τ.reorder h₂)` fails when `Γ`
-and `Δ` share a variable: `reorder` maps *every* occurrence of a binding to the
-value of its *first* occurrence in the source, so with `Γ = Δ = [(x, A)]`,
-`σ = cons s nil`, `τ = cons t nil` the two sides are `cons s (cons t nil)` and
-`cons s (cons s nil)`.  The v2 strategy never needs this identity anyway:
-agreement is tested on lookups, and `lookup_reorder` together with
-`lookup_append_left/right` computes the lookup of any reordered/appended
-valuation directly. -/
-
-/-- Agreement is inherited by left-appending a common valuation. -/
-theorem Valuation.Agreed.append_left {Γ Δ₁ Δ₂ : Context}
-    (σ : Valuation Γ) (τ₁ : Valuation Δ₁) (τ₂ : Valuation Δ₂)
-    (h : τ₁.Agreed τ₂) :
-    (σ.append τ₁).Agreed (σ.append τ₂) := by
-  intro x S h₁ h₂
-  by_cases hm : (x, S) ∈ Γ
-  · rw [lookup_append_left σ τ₁ hm, lookup_append_left σ τ₂ hm]
-  · have h₁' : (x, S) ∈ Δ₁ := by
-      rcases List.mem_append.mp h₁ with h | h
-      · exact absurd h hm
-      · exact h
-    have h₂' : (x, S) ∈ Δ₂ := by
-      rcases List.mem_append.mp h₂ with h | h
-      · exact absurd h hm
-      · exact h
-    rw [lookup_append_right σ τ₁ h₁' hm, lookup_append_right σ τ₂ h₂' hm]
-    exact h h₁' h₂'
-
-/-- Agreement survives reordering one side along a permutation: if the
-valuations at the permuted contexts agree, so do the valuations transported
-back along the permutation.  This is what makes the perm-stripping step of
-the successor induction work. -/
-theorem Valuation.Agreed.congr_reorder
-    {Γ Γ' Δ Δ' Γ₂ Δ₂ : Context}
-    (hΓ : List.Perm Γ Γ') (hΔ : List.Perm Δ Δ')
-    (σ₁ : Valuation Γ') (τ₁ : Valuation Δ')
-    (σ₂ : Valuation Γ₂) (τ₂ : Valuation Δ₂)
-    (h : (σ₁.append τ₁).Agreed (σ₂.append τ₂)) :
-    ((σ₁.reorder hΓ).append (τ₁.reorder hΔ)).Agreed (σ₂.append τ₂) := by
-  intro x S hm₁ hm₂
-  by_cases hx : (x, S) ∈ Γ
-  · have hx' : (x, S) ∈ Γ' := hΓ.mem_iff.mp hx
-    rw [lookup_append_left (σ₁.reorder hΓ) (τ₁.reorder hΔ) hx,
-      lookup_reorder hΓ σ₁ hx hx']
-    have hAg := h (List.mem_append_left Δ' hx') hm₂
-    rw [lookup_append_left σ₁ τ₁ hx'] at hAg
-    exact hAg
-  · have hd : (x, S) ∈ Δ := by
-      rcases List.mem_append.mp hm₁ with hm | hm
-      · exact absurd hm hx
-      · exact hm
-    have hd' : (x, S) ∈ Δ' := hΔ.mem_iff.mp hd
-    have hxn' : (x, S) ∉ Γ' := fun hm' => hx (hΓ.mem_iff.mpr hm')
-    rw [lookup_append_right (σ₁.reorder hΓ) (τ₁.reorder hΔ) hd hx,
-      lookup_reorder hΔ τ₁ hd hd']
-    have hAg := h (List.mem_append_right Γ' hd') hm₂
-    rw [lookup_append_right σ₁ τ₁ hd' hxn'] at hAg
-    exact hAg
-
-/-- Agreement survives reordering one side along a permutation, for single
-(not appended) valuations. -/
-theorem Valuation.Agreed.congr_reorder_single {Γ Γ'' Γ' : Context}
-    (h : List.Perm Γ'' Γ) {τ : Valuation Γ} {τ' : Valuation Γ'}
-    (hAg : τ.Agreed τ') : (τ.reorder h).Agreed τ' := by
-  intro x S hm₁ hm₂
-  rw [lookup_reorder h τ hm₁ (h.mem_iff.mp hm₁)]
-  exact hAg (h.mem_iff.mp hm₁) hm₂
-
-/-- The pair recombination, left factor: splitting a valuation over
-`Δ ++ (Δ₀ ++ Δ₁)` and re-joining the left component with the left component
-of the split of the remainder answers lookups like the original valuation,
-on the domain `Δ ++ Δ₀`. -/
-theorem Valuation.lookup_recombine_left {Δ Δ₀ Δ₁ : Context} :
-    ∀ (τ : Valuation (Δ ++ (Δ₀ ++ Δ₁))) ⦃x : Variable⦄ ⦃S : DataType⦄,
-      (x, S) ∈ Δ ++ Δ₀ →
-      lookup ((split (Γ := Δ) (Δ := Δ₀ ++ Δ₁) τ).1.append
-          (split (Γ := Δ₀) (Δ := Δ₁)
-            (split (Γ := Δ) (Δ := Δ₀ ++ Δ₁) τ).2).1) x S
-        = lookup τ x S := by
-  intro τ x S hm
-  by_cases hx : (x, S) ∈ Δ
-  · rw [lookup_append_left (split (Γ := Δ) (Δ := Δ₀ ++ Δ₁) τ).1
-        (split (Γ := Δ₀) (Δ := Δ₁)
-          (split (Γ := Δ) (Δ := Δ₀ ++ Δ₁) τ).2).1 hx,
-      lookup_split_left τ hx]
-  · have hm0 : (x, S) ∈ Δ₀ := by
-      rcases List.mem_append.mp hm with h | h
-      · exact absurd h hx
-      · exact h
-    rw [lookup_append_right (split (Γ := Δ) (Δ := Δ₀ ++ Δ₁) τ).1
-        (split (Γ := Δ₀) (Δ := Δ₁)
-          (split (Γ := Δ) (Δ := Δ₀ ++ Δ₁) τ).2).1 hm0 hx,
-      lookup_split_left (split (Γ := Δ) (Δ := Δ₀ ++ Δ₁) τ).2 hm0,
-      lookup_split_right τ (List.mem_append_left Δ₁ hm0) hx]
-
-/-- The pair recombination, right factor: same statement for the *right*
-component of the split of the remainder, on the domain `Δ ++ Δ₁`.  The
-hypothesis `(x, S) ∉ Δ₀` rules out a duplicated binding, which is available
-because the typing rule requires `Δ ++ Δ₀ ++ Δ₁` well-formed. -/
 theorem Valuation.lookup_recombine_right {Δ Δ₀ Δ₁ : Context} :
     ∀ (τ : Valuation (Δ ++ (Δ₀ ++ Δ₁))) ⦃x : Variable⦄ ⦃S : DataType⦄,
       (x, S) ∈ Δ ++ Δ₁ → (x, S) ∉ Δ₀ →
@@ -298,597 +171,6 @@ theorem Valuation.lookup_recombine_right {Δ Δ₀ Δ₁ : Context} :
 *replaced* by another valuation, provided the replacements answer lookups
 like the originals on their whole domains and the domains only grow.  This
 is the workhorse for the pair/try/app cases of the successor step. -/
-theorem Valuation.Agreed.congr_replace
-    {Γ₁ Γ₂ Δ₁ Δ₁' Δ₂ Δ₂' : Context}
-    (σ₁ : Valuation Γ₁) (σ₂ : Valuation Γ₂)
-    (τ₁ : Valuation Δ₁) (ρ₁ : Valuation Δ₁')
-    (τ₂ : Valuation Δ₂) (ρ₂ : Valuation Δ₂')
-    (h : (σ₁.append τ₁).Agreed (σ₂.append τ₂))
-    (hL : ∀ ⦃x : Variable⦄ ⦃S : DataType⦄, (x, S) ∈ Δ₁' → lookup ρ₁ x S = lookup τ₁ x S)
-    (hR : ∀ ⦃x : Variable⦄ ⦃S : DataType⦄, (x, S) ∈ Δ₂' → lookup ρ₂ x S = lookup τ₂ x S)
-    (hsub₁ : ∀ ⦃x : Variable⦄ ⦃S : DataType⦄, (x, S) ∈ Γ₁ ++ Δ₁' → (x, S) ∈ Γ₁ ++ Δ₁)
-    (hsub₂ : ∀ ⦃x : Variable⦄ ⦃S : DataType⦄, (x, S) ∈ Γ₂ ++ Δ₂' → (x, S) ∈ Γ₂ ++ Δ₂) :
-    (σ₁.append ρ₁).Agreed (σ₂.append ρ₂) := by
-  intro x S hm₁ hm₂
-  by_cases hx₁ : (x, S) ∈ Γ₁
-  · rw [lookup_append_left σ₁ ρ₁ hx₁]
-    by_cases hx₂ : (x, S) ∈ Γ₂
-    · rw [lookup_append_left σ₂ ρ₂ hx₂]
-      have hAg := h (List.mem_append_left Δ₁ hx₁) (List.mem_append_left Δ₂ hx₂)
-      rw [lookup_append_left σ₁ τ₁ hx₁, lookup_append_left σ₂ τ₂ hx₂] at hAg
-      exact hAg
-    · have d₂' : (x, S) ∈ Δ₂' := by
-        rcases List.mem_append.mp hm₂ with h_ | h_
-        · exact absurd h_ hx₂
-        · exact h_
-      have d₂ : (x, S) ∈ Δ₂ := by
-        rcases List.mem_append.mp (hsub₂ hm₂) with h_ | h_
-        · exact absurd h_ hx₂
-        · exact h_
-      rw [lookup_append_right σ₂ ρ₂ d₂' hx₂]
-      have hAg := h (List.mem_append_left Δ₁ hx₁) (hsub₂ hm₂)
-      rw [lookup_append_left σ₁ τ₁ hx₁, lookup_append_right σ₂ τ₂ d₂ hx₂] at hAg
-      rw [hR d₂']
-      exact hAg
-  · have d₁ : (x, S) ∈ Δ₁' := by
-      rcases List.mem_append.mp hm₁ with h_ | h_
-      · exact absurd h_ hx₁
-      · exact h_
-    have d₁old : (x, S) ∈ Δ₁ := by
-      rcases List.mem_append.mp (hsub₁ hm₁) with h_ | h_
-      · exact absurd h_ hx₁
-      · exact h_
-    rw [lookup_append_right σ₁ ρ₁ d₁ hx₁]
-    by_cases hx₂ : (x, S) ∈ Γ₂
-    · rw [lookup_append_left σ₂ ρ₂ hx₂]
-      have hAg := h (hsub₁ hm₁) (List.mem_append_left Δ₂ hx₂)
-      rw [lookup_append_right σ₁ τ₁ d₁old hx₁, lookup_append_left σ₂ τ₂ hx₂] at hAg
-      rw [hL d₁]
-      exact hAg
-    · have d₂' : (x, S) ∈ Δ₂' := by
-        rcases List.mem_append.mp hm₂ with h_ | h_
-        · exact absurd h_ hx₂
-        · exact h_
-      have d₂ : (x, S) ∈ Δ₂ := by
-        rcases List.mem_append.mp (hsub₂ hm₂) with h_ | h_
-        · exact absurd h_ hx₂
-        · exact h_
-      rw [lookup_append_right σ₂ ρ₂ d₂' hx₂]
-      have hAg := h (hsub₁ hm₁) (hsub₂ hm₂)
-      rw [lookup_append_right σ₁ τ₁ d₁old hx₁,
-        lookup_append_right σ₂ τ₂ d₂ hx₂] at hAg
-      rw [hL d₁, hR d₂']
-      exact hAg
-
-/-- Agreement is symmetric. -/
-theorem Valuation.Agreed.symm {Γ₁ Γ₂ : Context}
-    {σ₁ : Valuation Γ₁} {σ₂ : Valuation Γ₂} (h : σ₁.Agreed σ₂) :
-    σ₂.Agreed σ₁ := fun _ _ hm₁ hm₂ => (h hm₂ hm₁).symm
-
-/-- Agreement survives reordering *both* sides along permutations.  This is
-what the perm-vs-perm case of the successor step needs. -/
-theorem Valuation.Agreed.congr_reorder_both
-    {Γ₁ Δ₁ Γ₁' Δ₁' Γ₂ Δ₂ Γ₂' Δ₂' : Context}
-    (h₁ : List.Perm Γ₁ Γ₁') (h₁' : List.Perm Δ₁ Δ₁')
-    (h₂ : List.Perm Γ₂ Γ₂') (h₂' : List.Perm Δ₂ Δ₂')
-    (σ₁ : Valuation Γ₁') (τ₁ : Valuation Δ₁')
-    (σ₂ : Valuation Γ₂') (τ₂ : Valuation Δ₂')
-    (hAg : (σ₁.append τ₁).Agreed (σ₂.append τ₂)) :
-    ((σ₁.reorder h₁).append (τ₁.reorder h₁')).Agreed
-      ((σ₂.reorder h₂).append (τ₂.reorder h₂')) := by
-  intro x S hm₁ hm₂
-  by_cases hx₁ : (x, S) ∈ Γ₁
-  · have hx₁' : (x, S) ∈ Γ₁' := h₁.mem_iff.mp hx₁
-    rw [lookup_append_left (σ₁.reorder h₁) (τ₁.reorder h₁') hx₁,
-      lookup_reorder h₁ σ₁ hx₁ hx₁']
-    by_cases hx₂ : (x, S) ∈ Γ₂
-    · have hx₂' : (x, S) ∈ Γ₂' := h₂.mem_iff.mp hx₂
-      rw [lookup_append_left (σ₂.reorder h₂) (τ₂.reorder h₂') hx₂,
-        lookup_reorder h₂ σ₂ hx₂ hx₂']
-      have hAg' := hAg (List.mem_append_left Δ₁' hx₁')
-        (List.mem_append_left Δ₂' hx₂')
-      rw [lookup_append_left σ₁ τ₁ hx₁', lookup_append_left σ₂ τ₂ hx₂'] at hAg'
-      exact hAg'
-    · have hd₂ : (x, S) ∈ Δ₂ := by
-        rcases List.mem_append.mp hm₂ with hm | hm
-        · exact absurd hm hx₂
-        · exact hm
-      have hd₂' : (x, S) ∈ Δ₂' := h₂'.mem_iff.mp hd₂
-      rw [lookup_append_right (σ₂.reorder h₂) (τ₂.reorder h₂') hd₂ hx₂,
-        lookup_reorder h₂' τ₂ hd₂ hd₂']
-      have hAg' := hAg (List.mem_append_left Δ₁' hx₁')
-        (List.mem_append_right Γ₂' hd₂')
-      rw [lookup_append_left σ₁ τ₁ hx₁', lookup_append_right σ₂ τ₂ hd₂'
-        (fun hm => hx₂ (h₂.mem_iff.mpr hm))] at hAg'
-      exact hAg'
-  · have hd₁ : (x, S) ∈ Δ₁ := by
-      rcases List.mem_append.mp hm₁ with hm | hm
-      · exact absurd hm hx₁
-      · exact hm
-    have hd₁' : (x, S) ∈ Δ₁' := h₁'.mem_iff.mp hd₁
-    rw [lookup_append_right (σ₁.reorder h₁) (τ₁.reorder h₁') hd₁ hx₁,
-      lookup_reorder h₁' τ₁ hd₁ hd₁']
-    by_cases hx₂ : (x, S) ∈ Γ₂
-    · have hx₂' : (x, S) ∈ Γ₂' := h₂.mem_iff.mp hx₂
-      rw [lookup_append_left (σ₂.reorder h₂) (τ₂.reorder h₂') hx₂,
-        lookup_reorder h₂ σ₂ hx₂ hx₂']
-      have hAg' := hAg (List.mem_append_right Γ₁' hd₁')
-        (List.mem_append_left Δ₂' hx₂')
-      rw [lookup_append_right σ₁ τ₁ hd₁'
-        (fun hm => hx₁ (h₁.mem_iff.mpr hm)), lookup_append_left σ₂ τ₂ hx₂'] at hAg'
-      exact hAg'
-    · have hd₂ : (x, S) ∈ Δ₂ := by
-        rcases List.mem_append.mp hm₂ with hm | hm
-        · exact absurd hm hx₂
-        · exact hm
-      have hd₂' : (x, S) ∈ Δ₂' := h₂'.mem_iff.mp hd₂
-      rw [lookup_append_right (σ₂.reorder h₂) (τ₂.reorder h₂') hd₂ hx₂,
-        lookup_reorder h₂' τ₂ hd₂ hd₂']
-      have hAg' := hAg (List.mem_append_right Γ₁' hd₁')
-        (List.mem_append_right Γ₂' hd₂')
-      rw [lookup_append_right σ₁ τ₁ hd₁'
-        (fun hm => hx₁ (h₁.mem_iff.mpr hm)), lookup_append_right σ₂ τ₂ hd₂'
-        (fun hm => hx₂ (h₂.mem_iff.mpr hm))] at hAg'
-      exact hAg'
-
-/-- A well-formed three-part context has no variable shared between the
-middle part and the rest.  This is the freshness premise needed by
-`Valuation.lookup_recombine_right` in the pair case. -/
-theorem Context.wf_pair_append_fresh {Δ Δ₀ Δ₁ : Context}
-    (h : WellFormed ((Δ ++ Δ₀) ++ Δ₁)) {x : Variable} {S : DataType}
-    (h₀ : (x, S) ∈ Δ₀) (hm : (x, S) ∈ Δ ++ Δ₁) : False := by
-  rw [well_formed_iff_variables_distinct, List.map_append, List.map_append] at h
-  rcases List.nodup_append'.mp h with ⟨_, _, hD1⟩
-  rw [List.append_assoc] at h
-  rcases List.nodup_append'.mp h with ⟨_, _, hD2⟩
-  have hxm : x ∈ List.map Prod.fst Δ ++ List.map Prod.fst Δ₁ := by
-    rw [← List.map_append]
-    exact List.mem_map_of_mem (f := Prod.fst) hm
-  rcases List.mem_append.mp hxm with hm' | hm'
-  · exact hD2 hm'
-      (List.mem_append_left _ (List.mem_map_of_mem (f := Prod.fst) h₀))
-  · exact hD1 (List.mem_append_right _ (List.mem_map_of_mem (f := Prod.fst) h₀))
-      hm'
-
-/-- A well-formed two-part context: no binding of the right part occurs in
-the left part. -/
-theorem Context.wf_append_right_fresh {A B : Context}
-    (h : WellFormed (A ++ B)) {x : Variable} {S : DataType}
-    (hm : (x, S) ∈ B) : (x, S) ∉ A := by
-  rw [well_formed_iff_variables_distinct, List.map_append] at h
-  rcases List.nodup_append'.mp h with ⟨_, _, hD⟩
-  intro hmem
-  exact hD (List.mem_map_of_mem (f := Prod.fst) hmem)
-    (List.mem_map_of_mem (f := Prod.fst) hm)
-
-/-- In the ctrl case, the agreement between the merged valuations descends
-to the agreement between the *left components* of their splits at the ctrl
-sub-contexts.  The freshness side conditions come from the well-formedness
-premises of the ctrl rules. -/
-theorem Valuation.Agreed.split_ctrl
-    {Γa Γa' Δa Δa' Γb Γb' Δb Δb' : Context}
-    (σ₁ : Valuation (Γa ++ Γa')) (τ₁ : Valuation (Δa ++ Δa'))
-    (σ₂ : Valuation (Γb ++ Γb')) (τ₂ : Valuation (Δb ++ Δb'))
-    (hW₁ : Context.WellFormed ((Γa ++ Γa') ++ (Δa ++ Δa')))
-    (hW₂ : Context.WellFormed ((Γb ++ Γb') ++ (Δb ++ Δb')))
-    (hAg : (σ₁.append τ₁).Agreed (σ₂.append τ₂)) :
-    ((split (Γ := Γa) (Δ := Γa') σ₁).1.append
-        (split (Γ := Δa) (Δ := Δa') τ₁).1).Agreed
-      ((split (Γ := Γb) (Δ := Γb') σ₂).1.append
-        (split (Γ := Δb) (Δ := Δb') τ₂).1) := by
-  intro x S hm₁ hm₂
-  by_cases hx₁ : (x, S) ∈ Γa
-  · rw [lookup_append_left (split (Γ := Γa) (Δ := Γa') σ₁).1
-        (split (Γ := Δa) (Δ := Δa') τ₁).1 hx₁,
-      lookup_split_left σ₁ hx₁]
-    rcases List.mem_append.mp hm₂ with hx₂ | hd₂
-    · rw [lookup_append_left (split (Γ := Γb) (Δ := Γb') σ₂).1
-          (split (Γ := Δb) (Δ := Δb') τ₂).1 hx₂,
-        lookup_split_left σ₂ hx₂]
-      have hA := hAg (List.mem_append_left (Δa ++ Δa') (List.mem_append_left Γa' hx₁))
-        (List.mem_append_left (Δb ++ Δb') (List.mem_append_left Γb' hx₂))
-      rw [lookup_append_left σ₁ τ₁ (List.mem_append_left Γa' hx₁), lookup_append_left σ₂ τ₂ (List.mem_append_left Γb' hx₂)] at hA
-      exact hA
-    · have hF₂ : (x, S) ∉ Γb ++ Γb' :=
-        Context.wf_append_right_fresh hW₂ (List.mem_append_left Δb' hd₂)
-      rw [lookup_append_right (split (Γ := Γb) (Δ := Γb') σ₂).1
-          (split (Γ := Δb) (Δ := Δb') τ₂).1 hd₂
-          (fun h => hF₂ (List.mem_append_left _ h)),
-        lookup_split_left τ₂ hd₂]
-      have hA := hAg (List.mem_append_left (Δa ++ Δa') (List.mem_append_left Γa' hx₁))
-        (List.mem_append_right (Γb ++ Γb') (List.mem_append_left Δb' hd₂))
-      rw [lookup_append_left σ₁ τ₁ (List.mem_append_left Γa' hx₁),
-        lookup_append_right σ₂ τ₂ (List.mem_append_left Δb' hd₂)
-          hF₂] at hA
-      exact hA
-  · have hd₁ : (x, S) ∈ Δa := by
-      rcases List.mem_append.mp hm₁ with hm | hm
-      · exact absurd hm hx₁
-      · exact hm
-    have hF₁ : (x, S) ∉ Γa ++ Γa' :=
-      Context.wf_append_right_fresh hW₁ (List.mem_append_left Δa' hd₁)
-    rw [lookup_append_right (split (Γ := Γa) (Δ := Γa') σ₁).1
-        (split (Γ := Δa) (Δ := Δa') τ₁).1 hd₁
-        (fun h => hF₁ (List.mem_append_left _ h)),
-      lookup_split_left τ₁ hd₁]
-    rcases List.mem_append.mp hm₂ with hx₂ | hd₂
-    · rw [lookup_append_left (split (Γ := Γb) (Δ := Γb') σ₂).1
-          (split (Γ := Δb) (Δ := Δb') τ₂).1 hx₂,
-        lookup_split_left σ₂ hx₂]
-      have hA := hAg (List.mem_append_right (Γa ++ Γa') (List.mem_append_left Δa' hd₁))
-        (List.mem_append_left (Δb ++ Δb') (List.mem_append_left Γb' hx₂))
-      rw [lookup_append_right σ₁ τ₁ (List.mem_append_left Δa' hd₁)
-          hF₁,
-        lookup_append_left σ₂ τ₂ (List.mem_append_left Γb' hx₂)] at hA
-      exact hA
-    · have hF₂ : (x, S) ∉ Γb ++ Γb' :=
-        Context.wf_append_right_fresh hW₂ (List.mem_append_left Δb' hd₂)
-      rw [lookup_append_right (split (Γ := Γb) (Δ := Γb') σ₂).1
-          (split (Γ := Δb) (Δ := Δb') τ₂).1 hd₂
-          (fun h => hF₂ (List.mem_append_left _ h)),
-        lookup_split_left τ₂ hd₂]
-      have hA := hAg (List.mem_append_right (Γa ++ Γa') (List.mem_append_left Δa' hd₁))
-        (List.mem_append_right (Γb ++ Γb') (List.mem_append_left Δb' hd₂))
-      rw [lookup_append_right σ₁ τ₁ (List.mem_append_left Δa' hd₁)
-          hF₁,
-        lookup_append_right σ₂ τ₂ (List.mem_append_left Δb' hd₂)
-          hF₂] at hA
-      exact hA
-
-/-- The pair-split agreement, left factor: from the agreement between the
-merged valuations of two `hasMixedTypePair` decompositions, the agreement
-between the `Δ ++ Δ₀`-components of their pair splits.  No freshness needed:
-every variable of `Δ ++ Δ₀` is answered by the left component or the left
-component of the split of the remainder. -/
-theorem Valuation.Agreed.split_pair_left {Δa Δ0a Δ1a Δb Δ0b Δ1b : Context}
-    (τ₁ : Valuation ((Δa ++ Δ0a) ++ Δ1a)) (τ₂ : Valuation ((Δb ++ Δ0b) ++ Δ1b))
-    (hAg : τ₁.Agreed τ₂) :
-    (((Valuation.split (Γ := Δa) (Δ := Δ0a ++ Δ1a)
-        (List.append_assoc Δa Δ0a Δ1a ▸ τ₁)).1).append
-      ((Valuation.split (Γ := Δ0a) (Δ := Δ1a)
-        (Valuation.split (Γ := Δa) (Δ := Δ0a ++ Δ1a)
-          (List.append_assoc Δa Δ0a Δ1a ▸ τ₁)).2).1)).Agreed
-    (((Valuation.split (Γ := Δb) (Δ := Δ0b ++ Δ1b)
-        (List.append_assoc Δb Δ0b Δ1b ▸ τ₂)).1).append
-      ((Valuation.split (Γ := Δ0b) (Δ := Δ1b)
-        (Valuation.split (Γ := Δb) (Δ := Δ0b ++ Δ1b)
-          (List.append_assoc Δb Δ0b Δ1b ▸ τ₂)).2).1)) := by
-  intro x S hm₁ hm₂
-  rw [Valuation.lookup_recombine_left (Δ := Δa) (Δ₀ := Δ0a) (Δ₁ := Δ1a)
-      (List.append_assoc Δa Δ0a Δ1a ▸ τ₁) hm₁,
-    Valuation.lookup_append_assoc τ₁ x S,
-    Valuation.lookup_recombine_left (Δ := Δb) (Δ₀ := Δ0b) (Δ₁ := Δ1b)
-      (List.append_assoc Δb Δ0b Δ1b ▸ τ₂) hm₂,
-    Valuation.lookup_append_assoc τ₂ x S]
-  exact hAg (List.mem_append_left Δ1a hm₁)
-    (List.mem_append_left Δ1b hm₂)
-
-/-- The pair-split agreement, right factor: same statement for the
-`Δ ++ Δ₁`-components.  Here the freshness `(x, S) ∉ Δ₀` (available from the
-well-formedness of the pair contexts) is needed, because `lookup` scans left
-to right. -/
-theorem Valuation.Agreed.split_pair_right {Δa Δ0a Δ1a Δb Δ0b Δ1b : Context}
-    (τ₁ : Valuation ((Δa ++ Δ0a) ++ Δ1a)) (τ₂ : Valuation ((Δb ++ Δ0b) ++ Δ1b))
-    (hW₁ : Context.WellFormed ((Δa ++ Δ0a) ++ Δ1a))
-    (hW₂ : Context.WellFormed ((Δb ++ Δ0b) ++ Δ1b))
-    (hAg : τ₁.Agreed τ₂) :
-    (((Valuation.split (Γ := Δa) (Δ := Δ0a ++ Δ1a)
-        (List.append_assoc Δa Δ0a Δ1a ▸ τ₁)).1).append
-      ((Valuation.split (Γ := Δ0a) (Δ := Δ1a)
-        (Valuation.split (Γ := Δa) (Δ := Δ0a ++ Δ1a)
-          (List.append_assoc Δa Δ0a Δ1a ▸ τ₁)).2).2)).Agreed
-    (((Valuation.split (Γ := Δb) (Δ := Δ0b ++ Δ1b)
-        (List.append_assoc Δb Δ0b Δ1b ▸ τ₂)).1).append
-      ((Valuation.split (Γ := Δ0b) (Δ := Δ1b)
-        (Valuation.split (Γ := Δb) (Δ := Δ0b ++ Δ1b)
-          (List.append_assoc Δb Δ0b Δ1b ▸ τ₂)).2).2)) := by
-  intro x S hm₁ hm₂
-  have hF0a : (x, S) ∉ Δ0a := by
-    have hnd := Context.well_formed_iff_variables_distinct.mp hW₁
-    rw [List.map_append, List.map_append] at hnd
-    obtain ⟨hnd01, _, hD1⟩ := List.nodup_append'.mp hnd
-    obtain ⟨_, _, hD0⟩ := List.nodup_append'.mp hnd01
-    intro hmem0
-    rcases List.mem_append.mp hm₁ with ha | hz
-    · exact hD0 (List.mem_map_of_mem (f := Prod.fst) ha)
-        (List.mem_map_of_mem (f := Prod.fst) hmem0)
-    · exact hD1 (List.mem_append_right (Δa.map Prod.fst)
-        (List.mem_map_of_mem (f := Prod.fst) hmem0))
-        (List.mem_map_of_mem (f := Prod.fst) hz)
-  have hF0b : (x, S) ∉ Δ0b := by
-    have hnd := Context.well_formed_iff_variables_distinct.mp hW₂
-    rw [List.map_append, List.map_append] at hnd
-    obtain ⟨hnd01, _, hD1⟩ := List.nodup_append'.mp hnd
-    obtain ⟨_, _, hD0⟩ := List.nodup_append'.mp hnd01
-    intro hmem0
-    rcases List.mem_append.mp hm₂ with ha | hz
-    · exact hD0 (List.mem_map_of_mem (f := Prod.fst) ha)
-        (List.mem_map_of_mem (f := Prod.fst) hmem0)
-    · exact hD1 (List.mem_append_right (Δb.map Prod.fst)
-        (List.mem_map_of_mem (f := Prod.fst) hmem0))
-        (List.mem_map_of_mem (f := Prod.fst) hz)
-  rw [Valuation.lookup_recombine_right (Δ := Δa) (Δ₀ := Δ0a) (Δ₁ := Δ1a)
-      (List.append_assoc Δa Δ0a Δ1a ▸ τ₁) hm₁ hF0a,
-    Valuation.lookup_append_assoc τ₁ x S,
-    Valuation.lookup_recombine_right (Δ := Δb) (Δ₀ := Δ0b) (Δ₁ := Δ1b)
-      (List.append_assoc Δb Δ0b Δ1b ▸ τ₂) hm₂ hF0b,
-    Valuation.lookup_append_assoc τ₂ x S]
-  rcases List.mem_append.mp hm₁ with ha | hz
-  · rcases List.mem_append.mp hm₂ with ha' | hz'
-    · exact hAg (List.mem_append_left Δ1a (List.mem_append_left Δ0a ha))
-        (List.mem_append_left Δ1b (List.mem_append_left Δ0b ha'))
-    · exact hAg (List.mem_append_left Δ1a (List.mem_append_left Δ0a ha))
-        (List.mem_append_right (Δb ++ Δ0b) hz')
-  · rcases List.mem_append.mp hm₂ with ha' | hz'
-    · exact hAg (List.mem_append_right (Δa ++ Δ0a) hz)
-        (List.mem_append_left Δ1b (List.mem_append_left Δ0b ha'))
-    · exact hAg (List.mem_append_right (Δa ++ Δ0a) hz)
-        (List.mem_append_right (Δb ++ Δ0b) hz')
-
-/-- Agreement between the left components descends from the agreement
-between the merged valuations. -/
-theorem Valuation.Agreed.left_of_append
-    {Γ₁ Δ₁ Γ₂ Δ₂ : Context}
-    {σ₁ : Valuation Γ₁} {τ₁ : Valuation Δ₁}
-    {σ₂ : Valuation Γ₂} {τ₂ : Valuation Δ₂}
-    (hAg : (σ₁.append τ₁).Agreed (σ₂.append τ₂)) :
-    σ₁.Agreed σ₂ := by
-  intro x S hm₁ hm₂
-  rw [← Valuation.lookup_append_left σ₁ τ₁ hm₁, ← Valuation.lookup_append_left σ₂ τ₂ hm₂]
-  exact hAg (List.mem_append_left Δ₁ hm₁) (List.mem_append_left Δ₂ hm₂)
-
-/-- Agreement between the right components descends from the agreement
-between the merged valuations; the freshness side conditions rule out the
-variables of the right part occurring in the left part. -/
-theorem Valuation.Agreed.right_of_append
-    {Γ₁ Δ₁ Γ₂ Δ₂ : Context}
-    {σ₁ : Valuation Γ₁} {τ₁ : Valuation Δ₁}
-    {σ₂ : Valuation Γ₂} {τ₂ : Valuation Δ₂}
-    (hAg : (σ₁.append τ₁).Agreed (σ₂.append τ₂))
-    (hnd₁ : ∀ ⦃x : Variable⦄ ⦃S : DataType⦄, (x, S) ∈ Δ₁ → (x, S) ∉ Γ₁)
-    (hnd₂ : ∀ ⦃x : Variable⦄ ⦃S : DataType⦄, (x, S) ∈ Δ₂ → (x, S) ∉ Γ₂) :
-    τ₁.Agreed τ₂ := by
-  intro x S hm₁ hm₂
-  rw [← Valuation.lookup_append_right σ₁ τ₁ hm₁ (hnd₁ hm₁),
-    ← Valuation.lookup_append_right σ₂ τ₂ hm₂ (hnd₂ hm₂)]
-  exact hAg (List.mem_append_right Γ₁ hm₁) (List.mem_append_right Γ₂ hm₂)
-
-/-- Agreement of merged valuations survives inserting a branch valuation into
-the classical part.  The branch contexts `J₁` and `J₂` need only be
-permutation-related, and duplicate-freeness of the two branch composites
-rules out the "cross" cases (a binding living in the master classical part on
-one side and in the branch part on the other): those would be a repeated
-binding, which the well-formedness of the branch bodies excludes. -/
-theorem Valuation.Agreed.append_branch {A B J₁ J₂ Q R : Context}
-    (hJ : List.Perm J₁ J₂)
-    (hnd₁ : ((A ++ J₁) ++ Q).Nodup)
-    (hnd₂ : ((B ++ J₂) ++ R).Nodup)
-    (σ₁ : Valuation A) (σ₂ : Valuation B)
-    (τ₁ : Valuation Q) (τ₂ : Valuation R)
-    (σⱼ : Valuation J₂)
-    (hAg : (σ₁.append τ₁).Agreed (σ₂.append τ₂)) :
-    ((σ₁.append (σⱼ.reorder hJ)).append τ₁).Agreed
-      ((σ₂.append σⱼ).append τ₂) := by
-  intro x S hmL hmR
-  have hndAJ₁ : (A ++ J₁).Nodup := List.Nodup.of_append_left hnd₁
-  have hndBJ₂ : (B ++ J₂).Nodup := List.Nodup.of_append_left hnd₂
-  have hdisjAJ₁ : List.Disjoint A J₁ := List.disjoint_of_nodup_append hndAJ₁
-  have hdisjBJ₂ : List.Disjoint B J₂ := List.disjoint_of_nodup_append hndBJ₂
-  have hdisjQ₁ : List.Disjoint (A ++ J₁) Q := List.disjoint_of_nodup_append hnd₁
-  have hdisjR₂ : List.Disjoint (B ++ J₂) R := List.disjoint_of_nodup_append hnd₂
-  rcases List.mem_append.mp hmL with hmL' | hmQ
-  · -- left binding in the master classical part `A ++ J₁`
-    rcases List.mem_append.mp hmL' with hmA | hmJ₁
-    · -- left binding in `A`
-      rcases List.mem_append.mp hmR with hmR' | hmR
-      · rcases List.mem_append.mp hmR' with hmB | hmJ₂
-        · -- A / B
-          have hAB : Valuation.lookup σ₁ x S = Valuation.lookup σ₂ x S := by
-            rw [← Valuation.lookup_append_left σ₁ τ₁ hmA,
-              ← Valuation.lookup_append_left σ₂ τ₂ hmB]
-            exact hAg (List.mem_append_left Q hmA) (List.mem_append_left R hmB)
-          rw [Valuation.lookup_append_left (σ₁.append (σⱼ.reorder hJ)) τ₁
-                (List.mem_append_left J₁ hmA),
-              Valuation.lookup_append_left σ₁ (σⱼ.reorder hJ) hmA,
-              Valuation.lookup_append_left (σ₂.append σⱼ) τ₂
-                (List.mem_append_left J₂ hmB),
-              Valuation.lookup_append_left σ₂ σⱼ hmB]
-          exact hAB
-        · -- A / J₂ impossible
-          exact absurd (hJ.mem_iff.mpr hmJ₂)
-            (List.disjoint_left.mp hdisjAJ₁ hmA)
-      · -- A / R
-        have hnotB : (x, S) ∉ B :=
-          fun h => (List.disjoint_right.mp hdisjR₂ hmR) (List.mem_append_left J₂ h)
-        have hAR : Valuation.lookup σ₁ x S = Valuation.lookup τ₂ x S := by
-          rw [← Valuation.lookup_append_left σ₁ τ₁ hmA,
-            ← Valuation.lookup_append_right σ₂ τ₂ hmR hnotB]
-          exact hAg (List.mem_append_left Q hmA) (List.mem_append_right B hmR)
-        rw [Valuation.lookup_append_left (σ₁.append (σⱼ.reorder hJ)) τ₁
-              (List.mem_append_left J₁ hmA),
-            Valuation.lookup_append_left σ₁ (σⱼ.reorder hJ) hmA,
-            Valuation.lookup_append_right (σ₂.append σⱼ) τ₂ hmR
-              (List.disjoint_right.mp hdisjR₂ hmR)]
-        exact hAR
-    · -- left binding in `J₁`
-      rcases List.mem_append.mp hmR with hmR' | hmR
-      · rcases List.mem_append.mp hmR' with hmB | hmJ₂
-        · -- J₁ / B impossible
-          exact absurd hmB (List.disjoint_right.mp hdisjBJ₂ (hJ.mem_iff.mp hmJ₁))
-        · -- J₁ / J₂
-          have hnotA : (x, S) ∉ A := List.disjoint_right.mp hdisjAJ₁ hmJ₁
-          have hnotB : (x, S) ∉ B := List.disjoint_right.mp hdisjBJ₂ hmJ₂
-          rw [Valuation.lookup_append_left (σ₁.append (σⱼ.reorder hJ)) τ₁
-                (List.mem_append_right A hmJ₁),
-              Valuation.lookup_append_right σ₁ (σⱼ.reorder hJ) hmJ₁ hnotA,
-              Valuation.lookup_append_left (σ₂.append σⱼ) τ₂
-                (List.mem_append_right B hmJ₂),
-              Valuation.lookup_append_right σ₂ σⱼ hmJ₂ hnotB]
-          exact Valuation.lookup_reorder hJ σⱼ hmJ₁ hmJ₂
-      · -- J₁ / R impossible
-        exact absurd (List.mem_append_right B (hJ.mem_iff.mp hmJ₁))
-          (List.disjoint_right.mp hdisjR₂ hmR)
-  · -- left binding in the quantum part `Q`
-    rcases List.mem_append.mp hmR with hmR' | hmR
-    · rcases List.mem_append.mp hmR' with hmB | hmJ₂
-      · -- Q / B
-        have hnotA : (x, S) ∉ A :=
-          fun h => (List.disjoint_right.mp hdisjQ₁ hmQ) (List.mem_append_left J₁ h)
-        have hQB : Valuation.lookup τ₁ x S = Valuation.lookup σ₂ x S := by
-          rw [← Valuation.lookup_append_right σ₁ τ₁ hmQ hnotA,
-            ← Valuation.lookup_append_left σ₂ τ₂ hmB]
-          exact hAg (List.mem_append_right A hmQ) (List.mem_append_left R hmB)
-        rw [Valuation.lookup_append_right (σ₁.append (σⱼ.reorder hJ)) τ₁ hmQ
-              (List.disjoint_right.mp hdisjQ₁ hmQ),
-            Valuation.lookup_append_left (σ₂.append σⱼ) τ₂
-              (List.mem_append_left J₂ hmB),
-            Valuation.lookup_append_left σ₂ σⱼ hmB]
-        exact hQB
-      · -- Q / J₂ impossible
-        exact absurd hmQ
-          (List.disjoint_left.mp hdisjQ₁ (List.mem_append_right A (hJ.mem_iff.mpr hmJ₂)))
-    · -- Q / R
-      have hnotA : (x, S) ∉ A :=
-        fun h => (List.disjoint_right.mp hdisjQ₁ hmQ) (List.mem_append_left J₁ h)
-      have hnotB : (x, S) ∉ B :=
-        fun h => (List.disjoint_right.mp hdisjR₂ hmR) (List.mem_append_left J₂ h)
-      have hQR : Valuation.lookup τ₁ x S = Valuation.lookup τ₂ x S := by
-        rw [← Valuation.lookup_append_right σ₁ τ₁ hmQ hnotA,
-          ← Valuation.lookup_append_right σ₂ τ₂ hmR hnotB]
-        exact hAg (List.mem_append_right A hmQ) (List.mem_append_right B hmR)
-      rw [Valuation.lookup_append_right (σ₁.append (σⱼ.reorder hJ)) τ₁ hmQ
-            (List.disjoint_right.mp hdisjQ₁ hmQ),
-          Valuation.lookup_append_right (σ₂.append σⱼ) τ₂ hmR
-            (List.disjoint_right.mp hdisjR₂ hmR)]
-      exact hQR
-
-/-- Inversion for the `hasTypeCtrl` rule at the level of derivations.
-
-Given a derivation `d` of a judgment whose expression is
-`coherentControl e₀ Tc ls T'`, this produces the ctrl decomposition of `d`.
-Because the expression index of the `hasTypeCtrl` constructor mentions
-`l.map Prod.fst`, direct `cases` on `d` cannot invert the list equation;
-this lemma performs the inversion by induction on `d` (permuting
-derivations recurse to their inner derivation).
-
-The exported data:
-
-* `hPΓ hPΔ` — the decomposition contexts permute to the contexts of `d`;
-* the branch list projects to `ls`;
-* depth facts allowing `ih.mixed` and `ih.branch` to fire;
-* for every valuation `σ τ` of `d`'s contexts, valuations `ρσ ρτ` of the
-  decomposition contexts that answer lookups like `σ τ` on the
-  decomposition domains, such that `pureAmplitude d σ τ v` equals the
-  `branchAmplitude` of the decomposition at `ρσ ρτ`. -/
-theorem PureDerivation.ctrl_amplitude {Γ Δ : Context} {e : Expression}
-    {T : DataType} (d : PureDerivation Γ Δ e T) :
-    ∀ (e₀ : Expression) (Tc : DataType) (ls : List (Expression × Expression)),
-      e = Expression.coherentControl e₀ Tc ls T →
-    ∃ Γa Γa' Δa Δa' : Context, ∃ l : List ((Expression × Expression) × Context),
-      ∃ (_ : Context.WellFormed ((Γa ++ Γa') ++ Δa ++ Δa'))
-         (dMix : MixedDerivation (Γa ++ Δa) e₀ Tc)
-         (_ : Ortho Tc (l.map (Prod.fst ∘ Prod.fst)))
-         (dB : BranchDerivation Γa Γa' Δa Δa' l Tc T)
-         (_ : ∀ x, x ∈ Context.dom Δa → Erases x T (l.map (Prod.snd ∘ Prod.fst))),
-        List.Perm (Γa ++ Γa') Γ ∧
-        List.Perm (Δa ++ Δa') Δ ∧
-        l.map Prod.fst = ls ∧
-        Nat.succ dMix.depth ≤ PureDerivation.depth d ∧
-        Nat.succ dB.depth ≤ PureDerivation.depth d ∧
-        ∀ (σ : Valuation Γ) (τ : Valuation Δ) (v : Value T),
-          ∃ (ρσ : Valuation (Γa ++ Γa')) (ρτ : Valuation (Δa ++ Δa')),
-            (∀ ⦃x : Variable⦄ ⦃S : DataType⦄, (x, S) ∈ Γa ++ Γa' →
-                Valuation.lookup ρσ x S = Valuation.lookup σ x S) ∧
-            (∀ ⦃x : Variable⦄ ⦃S : DataType⦄, (x, S) ∈ Δa ++ Δa' →
-                Valuation.lookup ρτ x S = Valuation.lookup τ x S) ∧
-            pureAmplitude d σ τ v =
-              branchAmplitude dB (fun u : Value Tc =>
-                mixedAmplitude dMix
-                  ((Valuation.split (Γ := Γa) (Δ := Γa') ρσ).1.append
-                    (Valuation.split (Γ := Δa) (Δ := Δa') ρτ).1)
-                  ((Valuation.split (Γ := Γa) (Δ := Γa') ρσ).1.append
-                    (Valuation.split (Γ := Δa) (Δ := Δa') ρτ).1) u u) ρσ ρτ v :=
-  match d with
-  | .hasTypeUnit _ | .hasTypeCVar _ | .hasTypeQVar ..
-  | .hasTypePurePair .. | .hasTypePureApp .. => by
-      intro e₀ Tc ls hE
-      nomatch hE
-  | .hasTypePurePerm _ _ d' hΓ hΔ =>
-      by
-        intro e₀ Tc ls hE
-        obtain ⟨Ga, Ga', Da, Da', l, hW, dMix, hOrtho, dB, hEr,
-          hPΓ, hPΔ, hLmap, hD1, hD2, hEq⟩ := ctrl_amplitude d' e₀ Tc ls hE
-        refine ⟨Ga, Ga', Da, Da', l, hW, dMix, hOrtho, dB, hEr,
-          hPΓ.trans hΓ, hPΔ.trans hΔ, hLmap, ?_, ?_, ?_⟩
-        · simp only [PureDerivation.depth]
-          have := hD1
-          omega
-        · simp only [PureDerivation.depth]
-          have := hD2
-          omega
-        · intro σ τ v
-          obtain ⟨ρσ, ρτ, hrelσ, hrelτ, hamp⟩ :=
-            hEq (σ.reorder hΓ) (τ.reorder hΔ) v
-          refine ⟨ρσ, ρτ, ?_, ?_, ?_⟩
-          · intro x S hx
-            have hx' := hPΓ.mem_iff.mp hx
-            exact (hrelσ hx).trans
-              (Valuation.lookup_reorder hΓ σ hx' (hΓ.mem_iff.mp hx'))
-          · intro x S hx
-            have hx' := hPΔ.mem_iff.mp hx
-            exact (hrelτ hx).trans
-              (Valuation.lookup_reorder hΔ τ hx' (hΔ.mem_iff.mp hx'))
-          · simp only [pureAmplitude]
-            exact hamp
-  | .hasTypeCtrl Ga Ga' Da Da' l _ _ _ hW dMix hOrtho dB hEr =>
-      by
-        intro e₀ Tc ls hE
-        injection hE with h1 h2 h3
-        subst h1
-        subst h2
-        refine ⟨Ga, Ga', Da, Da', l, hW, dMix, hOrtho, dB, hEr,
-          List.Perm.refl _, List.Perm.refl _, h3, ?_, ?_, ?_⟩
-        · simp only [PureDerivation.depth]
-          omega
-        · simp only [PureDerivation.depth]
-          omega
-        · intro σ τ v
-          refine ⟨σ, τ, ?_, ?_, ?_⟩
-          · intro x S hx
-            rfl
-          · intro x S hx
-            rfl
-          · simp only [pureAmplitude]
-termination_by structural d
-
-/-! ## Cancellation of permutation factors
-
-Two list-cancellation facts used by the context-determination theorem: a
-common multiset factor can be removed from an equation between permutations.
-Both are proved by counting, so no duplicate-freeness side conditions are
-needed. -/
-
-theorem List.Perm.append_cancel_left {α : Type} [DecidableEq α]
-    {A A' B B' : List α} (hA : List.Perm A A')
-    (h : List.Perm (A ++ B) (A' ++ B')) : List.Perm B B' := by
-  rw [List.perm_iff_count] at h ⊢
-  intro x
-  have h1 := h x
-  have h2 := (List.perm_iff_count.mp hA) x
-  simp only [List.count_append] at h1
-  omega
-
-theorem List.Perm.append_cancel_mid {α : Type} [DecidableEq α]
-    {A A' J B B' : List α}
-    (h : List.Perm (A ++ J ++ B) (A' ++ J ++ B')) :
-    List.Perm (A ++ B) (A' ++ B') := by
-  rw [List.perm_iff_count] at h ⊢
-  intro x
-  have h1 := h x
-  simp only [List.count_append] at h1 ⊢
-  omega
-
-/-- A well-formed context is duplicate-free as a list of bindings. -/
 theorem Context.WellFormed.nodup {Γ : Context} (h : Γ.WellFormed) : Γ.Nodup := by
   induction h with
   | nil => simp
@@ -901,23 +183,6 @@ theorem Context.WellFormed.nodup {Γ : Context} (h : Γ.WellFormed) : Γ.Nodup :
 /-- Combining two shared-prefix split equations into a permutation of the two
 full contexts.  The duplicate-freeness hypotheses are essential: without them
 the splits can overlap and the lengths need not agree. -/
-theorem List.Perm.pair_combine {α : Type} [DecidableEq α]
-    {Da₁ D0₁ D1₁ Da₂ D0₂ D1₂ : List α}
-    (hnd₁ : (Da₁ ++ D0₁ ++ D1₁).Nodup) (hnd₂ : (Da₂ ++ D0₂ ++ D1₂).Nodup)
-    (h0 : List.Perm (Da₁ ++ D0₁) (Da₂ ++ D0₂))
-    (h1 : List.Perm (Da₁ ++ D1₁) (Da₂ ++ D1₂)) :
-    List.Perm (Da₁ ++ D0₁ ++ D1₁) (Da₂ ++ D0₂ ++ D1₂) := by
-  rw [List.perm_iff_count] at h0 h1 ⊢
-  intro x
-  have b₁ := (List.nodup_iff_count_le_one.mp hnd₁) x
-  have b₂ := (List.nodup_iff_count_le_one.mp hnd₂) x
-  have e0 := h0 x
-  have e1 := h1 x
-  simp only [List.count_append] at b₁ b₂ e0 e1 ⊢
-  omega
-
-/-! ## Enumeration length under permutations -/
-
 theorem Valuation.enum_length : ∀ (Γ : Context),
     (Valuation.enum Γ).length =
       (Γ.map (fun p : Binding => (Value.enum p.2).length)).prod
@@ -979,33 +244,6 @@ theorem Valuation.ext {Γ : Context} (hnd : Γ.Nodup) {σ τ : Valuation Γ}
 /-- When contexts are permutation-related, pairwise agreement transports
 equality tests between valuations. This is the trace-test invariant needed by
 the `try` rule. -/
-theorem Valuation.Agreed.eq_iff_of_perm {Γ₁ Γ₂ : Context}
-    (h : List.Perm Γ₁ Γ₂) (hnd₁ : Γ₁.Nodup) (hnd₂ : Γ₂.Nodup)
-    (τ₁ τ₁' : Valuation Γ₁) (τ₂ τ₂' : Valuation Γ₂)
-    (hAg : τ₁.Agreed τ₂) (hAg' : τ₁'.Agreed τ₂') :
-    (τ₁ = τ₁') ↔ (τ₂ = τ₂') := by
-  constructor
-  · intro he
-    apply Valuation.ext hnd₂
-    intro x S hx
-    have hx₁ : (x, S) ∈ Γ₁ := h.mem_iff.mpr hx
-    calc
-      Valuation.lookup τ₂ x S = Valuation.lookup τ₁ x S :=
-        (hAg hx₁ hx).symm
-      _ = Valuation.lookup τ₁' x S := by rw [he]
-      _ = Valuation.lookup τ₂' x S := hAg' hx₁ hx
-  · intro he
-    apply Valuation.ext hnd₁
-    intro x S hx
-    have hx₂ : (x, S) ∈ Γ₂ := h.mem_iff.mp hx
-    calc
-      Valuation.lookup τ₁ x S = Valuation.lookup τ₂ x S := hAg hx hx₂
-      _ = Valuation.lookup τ₂' x S := by rw [he]
-      _ = Valuation.lookup τ₁' x S := (hAg' hx hx₂).symm
-
-/-! ## Split and transport lemmas -/
-
-/-- Splitting an appended valuation recovers the two summands. -/
 theorem Valuation.split_append {Γ Δ : Context} :
     ∀ (σ : Valuation Γ) (ρ : Valuation Δ),
       (σ.append ρ).split = (σ, ρ) := by
@@ -1174,1025 +412,194 @@ theorem Valuation.enum_map_reorder_perm {Δ₁ Δ₂ : Context}
     rw [List.length_map, Valuation.enum_length_perm h]
   exact (hsub.perm_of_length_le hlen).symm
 
-theorem PureDerivation.eq_of_depth_zero
-    {Γ Δ e T} (d : PureDerivation Γ Δ e T) (hd : d.depth = 0) :
-    (e = .unit ∧ T = .unit ∧ Δ = [] ∧
-      ∃ hΓ : Context.WellFormed Γ,
-        HEq d (PureDerivation.hasTypeUnit (Γ := Γ) hΓ)) ∨
-    (∃ Γ₁ Γ₂ x,
-      e = .var x ∧
-      Δ = [] ∧
-      Γ = Γ₁ ++ [(x, T)] ++ Γ₂ ∧
-      ∃ hΓ : Context.WellFormed (Γ₁ ++ [(x, T)] ++ Γ₂),
-        HEq d (PureDerivation.hasTypeCVar
-          (Γ₁ := Γ₁) (Γ₂ := Γ₂) (x := x) (T := T) hΓ)) ∨
-    (∃ x,
-      e = .var x ∧
-      Δ = [(x, T)] ∧
-      ∃ hΓ : Context.WellFormed Γ,
-        ∃ hx : x ∉ Context.dom Γ,
-          HEq d (PureDerivation.hasTypeQVar
-            (Γ := Γ) (x := x) (T := T) hΓ hx)) := by
-  cases d with
-  | hasTypeUnit hΓ =>
-    exact Or.inl ⟨rfl, rfl, rfl, hΓ, HEq.rfl⟩
-  | hasTypeCVar hΓ =>
-    rename_i Γ₁ Γ₂ x
-    exact Or.inr (Or.inl
-      ⟨Γ₁, Γ₂, x, rfl, rfl, rfl, hΓ, HEq.rfl⟩)
-  | hasTypeQVar hΓ hx =>
-    rename_i x
-    exact Or.inr (Or.inr
-      ⟨x, rfl, rfl, hΓ, hx, HEq.rfl⟩)
-  | hasTypePurePair =>
-    simp [PureDerivation.depth] at hd
-  | hasTypeCtrl =>
-    simp [PureDerivation.depth] at hd
-  | hasTypePureApp =>
-    simp [PureDerivation.depth] at hd
-  | hasTypePurePerm =>
-    simp [PureDerivation.depth] at hd
-
-/-! ## Vanishing amplitudes -/
-
-/-- A pure derivation has vanishing amplitude. -/
-def PureVanishes {Γ Δ : Context} {e : Expression} {T : DataType}
-    (d : PureDerivation Γ Δ e T) : Prop :=
-  ∀ (σ : Valuation Γ) (τ : Valuation Δ) (v : Value T), pureAmplitude d σ τ v = 0
-
-/-- A mixed derivation has vanishing amplitude. -/
-def MixedVanishes {Δ : Context} {e : Expression} {T : DataType}
-    (d : MixedDerivation Δ e T) : Prop :=
-  ∀ (τ τ' : Valuation Δ) (v v' : Value T), mixedAmplitude d τ τ' v v' = 0
-
-/-- A branch derivation has vanishing amplitude. -/
-def BranchVanishes {Γ Γ' Δ Δ' : Context}
-    {l : List ((Expression × Expression) × Context)} {T T' : DataType}
-    (b : BranchDerivation Γ Γ' Δ Δ' l T T') : Prop :=
-  ∀ (prob : Value T → ℂ) (σ : Valuation (Γ ++ Γ'))
-    (τ : Valuation (Δ ++ Δ')) (v : Value T'), branchAmplitude b prob σ τ v = 0
-
-theorem MixedVanishes.hasTypeMix {Δ : Context} {e : Expression} {T : DataType}
-    (hW : Context.WellFormed Δ) (dp : PureDerivation [] Δ e T)
-    (h : PureVanishes dp) :
-    MixedVanishes (MixedDerivation.hasTypeMix hW dp) := by
-  intro τ τ' v v'
-  simp only [mixedAmplitude]
-  rw [h]
-  simp
-
-theorem MixedVanishes.of_perm {Δ Δ' : Context} {e : Expression} {T : DataType}
-    (hW : Context.WellFormed Δ') (d : MixedDerivation Δ e T)
-    (hperm : List.Perm Δ Δ') (h : MixedVanishes d) :
-    MixedVanishes (MixedDerivation.hasMixedTypePerm hW d hperm) := by
-  intro τ τ' v v'
-  simp only [mixedAmplitude]
-  exact h _ _ _ _
-
-theorem MixedVanishes.pair_left {Δ Δ₀ Δ₁ : Context} {e₀ e₁ : Expression}
-    {T₀ T₁ : DataType} (hW : Context.WellFormed (Δ ++ Δ₀ ++ Δ₁))
-    (d₀ : MixedDerivation (Δ ++ Δ₀) e₀ T₀)
-    (d₁ : MixedDerivation (Δ ++ Δ₁) e₁ T₁)
-    (h : MixedVanishes d₀) :
-    MixedVanishes (MixedDerivation.hasMixedTypePair hW d₀ d₁) := by
-  intro τ τ' v v'
-  simp only [mixedAmplitude]
-  rw [h]
-  simp
-
-theorem MixedVanishes.pair_right {Δ Δ₀ Δ₁ : Context} {e₀ e₁ : Expression}
-    {T₀ T₁ : DataType} (hW : Context.WellFormed (Δ ++ Δ₀ ++ Δ₁))
-    (d₀ : MixedDerivation (Δ ++ Δ₀) e₀ T₀)
-    (d₁ : MixedDerivation (Δ ++ Δ₁) e₁ T₁)
-    (h : MixedVanishes d₁) :
-    MixedVanishes (MixedDerivation.hasMixedTypePair hW d₀ d₁) := by
-  intro τ τ' v v'
-  simp only [mixedAmplitude]
-  rw [h]
-  simp
-
-theorem MixedVanishes.app {Δ : Context} {e : Expression} {f : Program}
-    {T T' : DataType} (df : ProgramDerivation f (T ⇛ T'))
-    (de : MixedDerivation Δ e T) (h : MixedVanishes de) :
-    MixedVanishes (MixedDerivation.hasMixedTypeApp df de) := by
-  intro τ τ' v v'
-  simp only [mixedAmplitude]
-  apply List.sum_eq_zero
-  intro z hz
-  rcases List.mem_map.mp hz with ⟨w, hw, rfl⟩
-  apply List.sum_eq_zero
-  intro z' hz'
-  rcases List.mem_map.mp hz' with ⟨w', hw', rfl⟩
-  rw [h τ τ' w w']
-  simp
-
-theorem MixedVanishes.try_both {Δ₀ Δ₁ : Context} {e₀ e₁ : Expression}
-    {T : DataType} (hW : Context.WellFormed (Δ₀ ++ Δ₁))
-    (d₀ : MixedDerivation Δ₀ e₀ T) (d₁ : MixedDerivation Δ₁ e₁ T)
-    (h₀ : MixedVanishes d₀) (h₁ : MixedVanishes d₁) :
-    MixedVanishes (MixedDerivation.hasTypeTry hW d₀ d₁) := by
-  intro τ τ' v v'
-  simp only [mixedAmplitude]
-  have htr : ((Value.enum T).map fun w =>
-      mixedAmplitude d₀
-        (Valuation.split (Γ := Δ₀) (Δ := Δ₁) τ).1
-        (Valuation.split (Γ := Δ₀) (Δ := Δ₁) τ').1 w w).sum = 0 := by
-    apply List.sum_eq_zero
-    intro z hz
-    rcases List.mem_map.mp hz with ⟨w, hw, rfl⟩
-    exact h₀ _ _ _ _
-  rw [h₀ _ _ v v', h₁ _ _ v v', htr]
-  simp
-
-theorem PureVanishes.pair {Γ Δ Δ₀ Δ₁ : Context} {e₀ e₁ : Expression}
-    {T₀ T₁ : DataType} (hΓ : Context.WellFormed Γ)
-    (hΔ : Context.WellFormed (Δ ++ Δ₀ ++ Δ₁))
-    (d₀ : PureDerivation Γ (Δ ++ Δ₀) e₀ T₀)
-    (d₁ : PureDerivation Γ (Δ ++ Δ₁) e₁ T₁)
-    (h : PureVanishes d₀) :
-    PureVanishes (PureDerivation.hasTypePurePair hΓ hΔ d₀ d₁) := by
-  intro σ τ v
-  simp only [pureAmplitude]
-  rw [h]
-  simp
-
-theorem PureVanishes.pair_right {Γ Δ Δ₀ Δ₁ : Context} {e₀ e₁ : Expression}
-    {T₀ T₁ : DataType} (hΓ : Context.WellFormed Γ)
-    (hΔ : Context.WellFormed (Δ ++ Δ₀ ++ Δ₁))
-    (d₀ : PureDerivation Γ (Δ ++ Δ₀) e₀ T₀)
-    (d₁ : PureDerivation Γ (Δ ++ Δ₁) e₁ T₁)
-    (h : PureVanishes d₁) :
-    PureVanishes (PureDerivation.hasTypePurePair hΓ hΔ d₀ d₁) := by
-  intro σ τ v
-  simp only [pureAmplitude]
-  rw [h]
-  simp
-
-theorem PureVanishes.app {Γ Δ : Context} {e : Expression} {f : Program}
-    {T T' : DataType} (df : ProgramDerivation f (T ⇝ T'))
-    (de : PureDerivation Γ Δ e T) (h : PureVanishes de) :
-    PureVanishes (PureDerivation.hasTypePureApp df de) := by
-  intro σ τ v
-  simp only [pureAmplitude]
-  have hm : ((Value.enum T).map fun w =>
-      programAmplitude df w v * pureAmplitude de σ τ w)
-      = ((Value.enum T).map fun w => programAmplitude df w v * 0) := by
-    apply List.map_congr_left
-    intro w _
-    rw [h]
-  rw [hm]
-  simp
-
-theorem PureVanishes.of_perm {Γ Γ' Δ Δ' : Context} {e : Expression} {T : DataType}
-    (hΓ : Context.WellFormed Γ') (hΔ : Context.WellFormed Δ')
-    (d : PureDerivation Γ Δ e T) (hpΓ : List.Perm Γ Γ') (hpΔ : List.Perm Δ Δ')
-    (h : PureVanishes d) :
-    PureVanishes (PureDerivation.hasTypePurePerm hΓ hΔ d hpΓ hpΔ) := by
-  intro σ τ v
-  simp only [pureAmplitude]
-  exact h _ _ _
-
-theorem BranchVanishes.nil {Γ Γ' Δ Δ' : Context} {T T' : DataType} :
-    BranchVanishes (BranchDerivation.nil Γ Γ' Δ Δ' T T') := by
-  intro prob σ τ v
-  simp only [branchAmplitude]
-
-theorem BranchVanishes.cons {Γ Γ' Δ Δ' Γⱼ : Context}
-    {eⱼ eⱼ' : Expression} {l : List ((Expression × Expression) × Context)}
-    {T T' : DataType}
-    (dPat : PureDerivation [] Γⱼ eⱼ T)
-    (dBody : PureDerivation (Γ ++ Γ' ++ Γⱼ) (Δ ++ Δ') eⱼ' T')
-    (b : BranchDerivation Γ Γ' Δ Δ' l T T')
-    (hb : PureVanishes dBody) (ht : BranchVanishes b) :
-    BranchVanishes (BranchDerivation.cons dPat dBody b) := by
-  intro prob σ τ v
-  simp only [branchAmplitude]
-  rw [ht, add_zero]
-  apply List.sum_eq_zero
-  intro z hz
-  rcases List.mem_map.mp hz with ⟨u, _, rfl⟩
-  rw [show (((Valuation.enum Γⱼ).map fun σⱼ =>
-      star (pureAmplitude dPat Valuation.nil σⱼ u) *
-        pureAmplitude dBody (σ.append σⱼ) τ v).sum) = 0 from ?_]
-  · simp
-  · apply List.sum_eq_zero
-    intro y hy
-    rcases List.mem_map.mp hy with ⟨σⱼ, _, rfl⟩
-    rw [hb]
-    simp
-
-theorem PureVanishes.ctrl {Γ Γ' Δ Δ' : Context}
-    {l : List ((Expression × Expression) × Context)}
-    {e : Expression} {T T' : DataType}
-    (hW : Context.WellFormed (Γ ++ Γ' ++ Δ ++ Δ'))
-    (dMix : MixedDerivation (Γ ++ Δ) e T)
-    (hOrtho : Ortho T (l.map (Prod.fst ∘ Prod.fst)))
-    (dB : BranchDerivation Γ Γ' Δ Δ' l T T')
-    (hEr : ∀ x, x ∈ Context.dom Δ → Erases x T' (l.map (Prod.snd ∘ Prod.fst)))
-    (h : BranchVanishes dB) :
-    PureVanishes (PureDerivation.hasTypeCtrl Γ Γ' Δ Δ' l e T T'
-      hW dMix hOrtho dB hEr) := by
-  intro σ τ v
-  simp only [pureAmplitude]
-  exact h _ _ _ _
-
-/-- A branch list vanishes when the head *pattern* derivation vanishes, provided
-the tail vanishes: the head contribution is then a sum all of whose summands
-carry the factor `star (pureAmplitude dPat …) = 0`. -/
-theorem BranchVanishes.cons_of_pat {Γ Γ' Δ Δ' Γⱼ : Context}
-    {eⱼ eⱼ' : Expression} {l : List ((Expression × Expression) × Context)}
-    {T T' : DataType}
-    (dPat : PureDerivation [] Γⱼ eⱼ T)
-    (dBody : PureDerivation (Γ ++ Γ' ++ Γⱼ) (Δ ++ Δ') eⱼ' T')
-    (b : BranchDerivation Γ Γ' Δ Δ' l T T')
-    (hp : PureVanishes dPat) (ht : BranchVanishes b) :
-    BranchVanishes (BranchDerivation.cons dPat dBody b) := by
-  intro prob σ τ v
-  simp only [branchAmplitude]
-  rw [ht, add_zero]
-  apply List.sum_eq_zero
-  intro z hz
-  rcases List.mem_map.mp hz with ⟨u, _, rfl⟩
-  have hinner : ((Valuation.enum Γⱼ).map fun σⱼ =>
-      star (pureAmplitude dPat .nil σⱼ u) *
-        pureAmplitude dBody (σ.append σⱼ) τ v).sum = 0 := by
-    apply List.sum_eq_zero
-    intro y hy
-    rcases List.mem_map.mp hy with ⟨σⱼ, _, rfl⟩
-    rw [hp, star_zero, zero_mul]
-  rw [hinner, mul_zero]
-
-/-- Implicit-argument variant of `PureVanishes.app` (the program derivation is
-read off the goal). -/
-theorem PureVanishes.appI {Γ Δ : Context} {e : Expression} {f : Program}
-    {T T' : DataType} {df : ProgramDerivation f (T ⇝ T')}
-    {de : PureDerivation Γ Δ e T} (h : PureVanishes de) :
-    PureVanishes (PureDerivation.hasTypePureApp df de) :=
-  PureVanishes.app df de h
-
-/-- Implicit-argument variant of `PureVanishes.pair` (left factor). -/
-theorem PureVanishes.pairI {Γ Δ Δ₀ Δ₁ : Context} {e₀ e₁ : Expression}
-    {T₀ T₁ : DataType} {hΓ : Context.WellFormed Γ}
-    {hΔ : Context.WellFormed (Δ ++ Δ₀ ++ Δ₁)}
-    {d₀ : PureDerivation Γ (Δ ++ Δ₀) e₀ T₀}
-    {d₁ : PureDerivation Γ (Δ ++ Δ₁) e₁ T₁} (h : PureVanishes d₀) :
-    PureVanishes (PureDerivation.hasTypePurePair hΓ hΔ d₀ d₁) :=
-  PureVanishes.pair hΓ hΔ d₀ d₁ h
-
-/-- Implicit-argument variant of `PureVanishes.pair` (right factor). -/
-theorem PureVanishes.pairIr {Γ Δ Δ₀ Δ₁ : Context} {e₀ e₁ : Expression}
-    {T₀ T₁ : DataType} {hΓ : Context.WellFormed Γ}
-    {hΔ : Context.WellFormed (Δ ++ Δ₀ ++ Δ₁)}
-    {d₀ : PureDerivation Γ (Δ ++ Δ₀) e₀ T₀}
-    {d₁ : PureDerivation Γ (Δ ++ Δ₁) e₁ T₁} (h : PureVanishes d₁) :
-    PureVanishes (PureDerivation.hasTypePurePair hΓ hΔ d₀ d₁) :=
-  PureVanishes.pair_right hΓ hΔ d₀ d₁ h
-
-/-- Implicit-argument variant of `PureVanishes.of_perm`. -/
-theorem PureVanishes.permI {Γ Γ' Δ Δ' : Context} {e : Expression} {T : DataType}
-    {hΓ : Context.WellFormed Γ'} {hΔ : Context.WellFormed Δ'}
-    {d : PureDerivation Γ Δ e T} {hpΓ : List.Perm Γ Γ'} {hpΔ : List.Perm Δ Δ'}
-    (h : PureVanishes d) :
-    PureVanishes (PureDerivation.hasTypePurePerm hΓ hΔ d hpΓ hpΔ) :=
-  PureVanishes.of_perm hΓ hΔ d hpΓ hpΔ h
-
-theorem PureDerivation.no_try {Γ Δ : Context} {e₀ e₁ : Expression} {T : DataType}
-    (d : PureDerivation Γ Δ (.tryCatch e₀ e₁) T) : False := by
-  cases d with
-  | hasTypePurePerm _ _ d' _ _ => exact PureDerivation.no_try d'
-termination_by d.depth
-decreasing_by all_goals simp_all [PureDerivation.depth]
-
-theorem PureDerivation.depth_cast_quantum {Γ Δ Δ' : Context}
-    {e : Expression} {T : DataType} (h : Δ = Δ')
-    (d : PureDerivation Γ Δ e T) :
-    (h ▸ d).depth = d.depth := by
-  cases h
-  rfl
-
-
-/-! ## Context determination
-
-The remaining `prog`/`ctrl` comparisons need to know that two derivations of
-the *same* expression and type live at quantum contexts that are
-permutation-related, as soon as their classical contexts are permutation-
-related (or empty) — unless their amplitudes vanish identically.  This
-section proves exactly that, together with the mixed and pure-vs-mixed
-analogues and the branch version needed by the `ctrl` case.
-
-The statements are *disjunctive* because the typing rules genuinely
-over-generate: context bindings can be moved between the shared and the
-branch parts of a split, and the `ctrl` rule can choose an arbitrary quantum
-branch context `Δ'` when the branch list is empty.  Derivations exploiting
-that freedom have vanishing amplitude.
-
-The classical-context hypothesis of `pure` and `branch` is *permutation*
-(not equality): the branch case needs it because the per-branch pattern
-contexts `Γⱼ` of two `ctrl` derivations are only permutation-related. -/
-
-/-- The part of context determination needed for the amplitude induction:
-pure derivations (and branch lists) at the same expression have permutation-
-related contexts, unless both amplitudes vanish. -/
-structure CtxDetPB (n : Nat) : Prop where
-  /-- Two pure derivations whose classical contexts are permutation-related. -/
-  pure : ∀ {Γ₁ Γ₂ Δ₁ Δ₂ : Context} {e : Expression} {T : DataType}
-    (d₁ : PureDerivation Γ₁ Δ₁ e T) (d₂ : PureDerivation Γ₂ Δ₂ e T),
-    List.Perm Γ₁ Γ₂ → d₁.depth + d₂.depth ≤ n →
-    List.Perm Δ₁ Δ₂ ∨ (PureVanishes d₁ ∧ PureVanishes d₂)
-  /-- Two branch derivations over the same pattern-expression list, whose
-  enclosing total classical contexts are permutation-related. -/
-  branch : ∀ {Γa Γa' Δa Δa' Γb Γb' Δb Δb' : Context}
-    {la lb : List ((Expression × Expression) × Context)} {T T' : DataType}
-    (b₁ : BranchDerivation Γa Γa' Δa Δa' la T T')
-    (b₂ : BranchDerivation Γb Γb' Δb Δb' lb T T'),
-    la.map Prod.fst = lb.map Prod.fst →
-    List.Perm (Γa ++ Γa') (Γb ++ Γb') → b₁.depth + b₂.depth ≤ n →
-    List.Perm (Δa ++ Δa') (Δb ++ Δb') ∨ (BranchVanishes b₁ ∧ BranchVanishes b₂)
-
-/-- Context determination facts at depth bound `n`. -/
-structure CtxDet (n : Nat) : Prop where
-  /-- Two pure derivations whose classical contexts are permutation-related. -/
-  pure : ∀ {Γ₁ Γ₂ Δ₁ Δ₂ : Context} {e : Expression} {T : DataType}
-    (d₁ : PureDerivation Γ₁ Δ₁ e T) (d₂ : PureDerivation Γ₂ Δ₂ e T),
-    List.Perm Γ₁ Γ₂ → d₁.depth + d₂.depth ≤ n →
-    List.Perm Δ₁ Δ₂ ∨ (PureVanishes d₁ ∧ PureVanishes d₂)
-  /-- Two mixed derivations. -/
-  mixed : ∀ {Δ₁ Δ₂ : Context} {e : Expression} {T : DataType}
-    (d₁ : MixedDerivation Δ₁ e T) (d₂ : MixedDerivation Δ₂ e T),
-    d₁.depth + d₂.depth ≤ n →
-    List.Perm Δ₁ Δ₂ ∨
-      (MixedVanishes d₁ ∧ MixedVanishes d₂ ∧
-        ∀ (τ₁ τ₁' : Valuation Δ₁) (τ₂ τ₂' : Valuation Δ₂),
-          τ₁.Agreed τ₂ → τ₁'.Agreed τ₂' →
-          ((τ₁ = τ₁') ↔ (τ₂ = τ₂')))
-  /-- A pure derivation with empty classical context and a mixed derivation. -/
-  pureMixed : ∀ {Γ₁ Δ₁ Δ₂ : Context} {e : Expression} {T : DataType}
-    (d₁ : PureDerivation Γ₁ Δ₁ e T) (d₂ : MixedDerivation Δ₂ e T),
-    Γ₁ = [] → d₁.depth + d₂.depth ≤ n →
-    List.Perm Δ₁ Δ₂ ∨ (PureVanishes d₁ ∧ MixedVanishes d₂)
-  /-- Two branch derivations over the same pattern-expression list, whose
-  enclosing total classical contexts are permutation-related. -/
-  branch : ∀ {Γa Γa' Δa Δa' Γb Γb' Δb Δb' : Context}
-    {la lb : List ((Expression × Expression) × Context)} {T T' : DataType}
-    (b₁ : BranchDerivation Γa Γa' Δa Δa' la T T')
-    (b₂ : BranchDerivation Γb Γb' Δb Δb' lb T T'),
-    la.map Prod.fst = lb.map Prod.fst →
-    List.Perm (Γa ++ Γa') (Γb ++ Γb') → b₁.depth + b₂.depth ≤ n →
-    List.Perm (Δa ++ Δa') (Δb ++ Δb') ∨ (BranchVanishes b₁ ∧ BranchVanishes b₂)
-
-/-- Context determination for pure/mixed comparisons. This fragment does not
-depend on mixed/mixed context determination. -/
-structure CtxDetPM (n : Nat) : Prop where
-  pb : CtxDetPB n
-  pureMixed : ∀ {Γ₁ Δ₁ Δ₂ : Context} {e : Expression} {T : DataType}
-    (d₁ : PureDerivation Γ₁ Δ₁ e T) (d₂ : MixedDerivation Δ₂ e T),
-    Γ₁ = [] → d₁.depth + d₂.depth ≤ n →
-    List.Perm Δ₁ Δ₂ ∨ (PureVanishes d₁ ∧ MixedVanishes d₂)
-
-/-- Context determination for mixed derivations preserves the within-side
-valuation equality tests used by `try`. In the permutation case this follows
-from extensionality; in the vanishing case it is recorded explicitly. -/
-theorem CtxDet.mixed_trace {n : Nat} (det : CtxDet n)
-    {Δ₁ Δ₂ : Context} {e : Expression} {T : DataType}
-    (d₁ : MixedDerivation Δ₁ e T) (d₂ : MixedDerivation Δ₂ e T)
-    (hsum : d₁.depth + d₂.depth ≤ n)
-    (τ₁ τ₁' : Valuation Δ₁) (τ₂ τ₂' : Valuation Δ₂)
-    (hAg : τ₁.Agreed τ₂) (hAg' : τ₁'.Agreed τ₂') :
-    (τ₁ = τ₁') ↔ (τ₂ = τ₂') := by
-  rcases det.mixed d₁ d₂ hsum with hperm | ⟨_, _, htrace⟩
-  · exact Valuation.Agreed.eq_iff_of_perm hperm
-      (Context.WellFormed.nodup
-        (HasMixedType.context_well_formed d₁.toProp))
-      (Context.WellFormed.nodup
-        (HasMixedType.context_well_formed d₂.toProp))
-      τ₁ τ₁' τ₂ τ₂' hAg hAg'
-  · exact @htrace τ₁ τ₁' τ₂ τ₂' hAg hAg'
-
-/-- Base case of context determination: at depth zero every pure derivation
-is `unit`, `cvar` or `qvar`, and two of them over the same expression agree on
-their quantum context (up to permutation); mixed derivations have positive
-depth and branch derivations of depth zero are `nil`. -/
-theorem ctxDet_base : CtxDet 0 where
-  pure := by
-    intro Γ₁ Γ₂ Δ₁ Δ₂ e T d₁ d₂ hΓperm hsum
-    have hz₁ : d₁.depth = 0 := by omega
-    have hz₂ : d₂.depth = 0 := by omega
-    rcases PureDerivation.eq_of_depth_zero d₁ hz₁ with
-      ⟨he₁, -, hΔ₁, -⟩ | ⟨Ga, Gb, x, he₁, hΔ₁, hGeq₁, -⟩ |
-      ⟨x, he₁, hΔ₁, -, hxdom₁, -⟩
-    · rcases PureDerivation.eq_of_depth_zero d₂ hz₂ with
-        ⟨he₂, -, hΔ₂, -⟩ | ⟨Ga, Gb, x, he₂, hΔ₂, hGeq₂, -⟩ |
-        ⟨x, he₂, hΔ₂, -, -, -⟩
-      · subst hΔ₁; subst hΔ₂; exact Or.inl (List.Perm.refl [])
-      · exact absurd (he₁.symm.trans he₂) (by simp)
-      · exact absurd (he₁.symm.trans he₂) (by simp)
-    · -- `cvar` on the left
-      rcases PureDerivation.eq_of_depth_zero d₂ hz₂ with
-        ⟨he₂, -, hΔ₂, -⟩ | ⟨Ga', Gb', x', he₂, hΔ₂, hGeq₂, -⟩ |
-        ⟨x', he₂, hΔ₂, -, hxdom₂, -⟩
-      · exact absurd (he₁.symm.trans he₂) (by simp)
-      · subst hΔ₁; subst hΔ₂; exact Or.inl (List.Perm.refl [])
-      · have hxx : x = x' := by injection he₁.symm.trans he₂
-        subst hxx
-        subst hGeq₁
-        have hxmem : (x, T) ∈ Γ₂ := hΓperm.mem_iff.mp
-          (List.mem_append_left Gb
-            (List.mem_append_right Ga (List.mem_singleton_self (x, T))))
-        exact absurd hxmem (fun hm => hxdom₂ (by
-          rw [Context.mem_dom_iff_in_context]
-          exact List.mem_map_of_mem (f := Prod.fst) hm))
-    · -- `qvar` on the left
-      rcases PureDerivation.eq_of_depth_zero d₂ hz₂ with
-        ⟨he₂, -, hΔ₂, -⟩ | ⟨Ga', Gb', x', he₂, hΔ₂, hGeq₂, -⟩ |
-        ⟨x', he₂, hΔ₂, -, hxdom₂, -⟩
-      · exact absurd (he₁.symm.trans he₂) (by simp)
-      · have hxx : x = x' := by injection he₁.symm.trans he₂
-        subst hxx
-        subst hGeq₂
-        have hxmem : (x, T) ∈ Γ₁ := hΓperm.mem_iff.mpr
-          (List.mem_append_left Gb'
-            (List.mem_append_right Ga' (List.mem_singleton_self (x, T))))
-        exact absurd hxmem (fun hm => hxdom₁ (by
-          rw [Context.mem_dom_iff_in_context]
-          exact List.mem_map_of_mem (f := Prod.fst) hm))
-      · have hxx : x = x' := by injection he₁.symm.trans he₂
-        subst hxx; subst hΔ₁; subst hΔ₂
-        exact Or.inl (List.Perm.refl _)
-  mixed := by
-    intro Δ₁ Δ₂ e T d₁ d₂ hsum
-    cases d₁ <;> (simp only [MixedDerivation.depth] at hsum; omega)
-  pureMixed := by
-    intro Γ₁ Δ₁ Δ₂ e T d₁ d₂ hΓ₁ hsum
-    cases d₂ <;> (simp only [MixedDerivation.depth] at hsum; omega)
-  branch := by
-    intro Γa Γa' Δa Δa' Γb Γb' Δb Δb' la lb T T' b₁ b₂ hmap hΓperm hsum
-    have hz₁ : b₁.depth = 0 := by omega
-    have hz₂ : b₂.depth = 0 := by omega
-    cases b₁ with
-    | nil =>
-        cases b₂ with
-        | nil => exact Or.inr ⟨BranchVanishes.nil, BranchVanishes.nil⟩
-        | cons => simp [BranchDerivation.depth] at hz₂
-    | cons => simp [BranchDerivation.depth] at hz₁
-
-/-- Successor step for the `pure` field of context determination. -/
-theorem ctxDet_pure_step {n : Nat} (ih : CtxDetPB n) :
-    ∀ {Γ₁ Γ₂ Δ₁ Δ₂ : Context} {e : Expression} {T : DataType}
-      (d₁ : PureDerivation Γ₁ Δ₁ e T) (d₂ : PureDerivation Γ₂ Δ₂ e T),
-      List.Perm Γ₁ Γ₂ → d₁.depth + d₂.depth ≤ n + 1 →
-      List.Perm Δ₁ Δ₂ ∨ (PureVanishes d₁ ∧ PureVanishes d₂) := by
-  intro Γ₁ Γ₂ Δ₁ Δ₂ e T d₁ d₂ hΓperm hsum
-  cases d₂ with
-  | hasTypeUnit hW₂ =>
-      cases d₁ with
-      | hasTypeUnit hW₁ => exact Or.inl (List.Perm.refl _)
-      | hasTypePurePerm hW₁ hWΔ₁ d₁' hp₁Γ hp₁Δ =>
-          have hΓ₁' : List.Perm _ Γ₂ := hp₁Γ.trans hΓperm
-          have hb : d₁'.depth + (PureDerivation.hasTypeUnit hW₂).depth ≤ n := by
-            simp only [PureDerivation.depth] at hsum ⊢
-            omega
-          rcases ih.pure d₁' (PureDerivation.hasTypeUnit hW₂) hΓ₁' hb with
-            hp | ⟨v₁, v₂⟩
-          · exact Or.inl (hp₁Δ.symm.trans hp)
-          · exact Or.inr ⟨PureVanishes.permI v₁, v₂⟩
-  | hasTypeCVar hW₂ =>
-      rename_i Ga₂ Gb₂ x
-      cases d₁ with
-      | hasTypeCVar hW₁ => exact Or.inl (List.Perm.refl [])
-      | hasTypeQVar hW₁ hx₁ =>
-          exfalso
-          have hxmem : (x, T) ∈ Ga₂ ++ [(x, T)] ++ Gb₂ :=
-            List.mem_append_left Gb₂
-              (List.mem_append_right Ga₂ (List.mem_singleton_self (x, T)))
-          have hin := hΓperm.mem_iff.mpr hxmem
-          exact hx₁ ((Context.mem_dom_iff_in_context x _).mpr
-            (List.mem_map_of_mem (f := Prod.fst) hin))
-      | hasTypePurePerm hW₁ hWΔ₁ d₁' hp₁Γ hp₁Δ =>
-          have hΓ₁' : List.Perm _ (Ga₂ ++ [(x, T)] ++ Gb₂) := hp₁Γ.trans hΓperm
-          have hb : d₁'.depth + (PureDerivation.hasTypeCVar hW₂).depth ≤ n := by
-            simp only [PureDerivation.depth] at hsum ⊢
-            omega
-          rcases ih.pure d₁' (PureDerivation.hasTypeCVar hW₂) hΓ₁' hb with
-            hp | ⟨v₁, v₂⟩
-          · exact Or.inl (hp₁Δ.symm.trans hp)
-          · exact Or.inr ⟨PureVanishes.permI v₁, v₂⟩
-  | hasTypeQVar hW₂ hx₂ =>
-      rename_i x
-      cases d₁ with
-      | hasTypeCVar hW₁ =>
-          rename_i Ga₁ Gb₁
-          exfalso
-          have hxmem : (x, T) ∈ Ga₁ ++ [(x, T)] ++ Gb₁ :=
-            List.mem_append_left Gb₁
-              (List.mem_append_right Ga₁ (List.mem_singleton_self (x, T)))
-          have hin := hΓperm.mem_iff.mp hxmem
-          exact hx₂ ((Context.mem_dom_iff_in_context x _).mpr
-            (List.mem_map_of_mem (f := Prod.fst) hin))
-      | hasTypeQVar hW₁ hx₁ => exact Or.inl (List.Perm.refl _)
-      | hasTypePurePerm hW₁ hWΔ₁ d₁' hp₁Γ hp₁Δ =>
-          have hΓ₁' : List.Perm _ Γ₂ := hp₁Γ.trans hΓperm
-          have hb : d₁'.depth
-              + (PureDerivation.hasTypeQVar (T := T) hW₂ hx₂).depth ≤ n := by
-            simp only [PureDerivation.depth] at hsum ⊢
-            omega
-          rcases ih.pure d₁'
-            (PureDerivation.hasTypeQVar (T := T) hW₂ hx₂) hΓ₁' hb with
-            hp | ⟨v₁, v₂⟩
-          · exact Or.inl (hp₁Δ.symm.trans hp)
-          · exact Or.inr ⟨PureVanishes.permI v₁, v₂⟩
-  | hasTypePurePair hG₂ hD₂ d₀₂ d₁₂ =>
-      rename_i D₂ D0₂ D1₂
-      cases d₁ with
-      | hasTypePurePair hG₁ hD₁ d₀₁ d₁₁ =>
-          rename_i D₁ D0₁ D1₁
-          have hb0 : d₀₁.depth + d₀₂.depth ≤ n := by
-            simp only [PureDerivation.depth] at hsum
-            have m1 : d₀₁.depth ≤ Nat.max d₀₁.depth d₁₁.depth := Nat.le_max_left _ _
-            have m2 : d₀₂.depth ≤ Nat.max d₀₂.depth d₁₂.depth := Nat.le_max_left _ _
-            omega
-          have hb1 : d₁₁.depth + d₁₂.depth ≤ n := by
-            simp only [PureDerivation.depth] at hsum
-            have m1 : d₁₁.depth ≤ Nat.max d₀₁.depth d₁₁.depth := Nat.le_max_right _ _
-            have m2 : d₁₂.depth ≤ Nat.max d₀₂.depth d₁₂.depth := Nat.le_max_right _ _
-            omega
-          rcases ih.pure d₀₁ d₀₂ hΓperm hb0 with h0 | ⟨v01, v02⟩
-          · rcases ih.pure d₁₁ d₁₂ hΓperm hb1 with h1 | ⟨v11, v12⟩
-            · exact Or.inl (List.Perm.pair_combine hD₁.nodup hD₂.nodup h0 h1)
-            · exact Or.inr ⟨PureVanishes.pairIr v11, PureVanishes.pairIr v12⟩
-          · exact Or.inr ⟨PureVanishes.pairI v01, PureVanishes.pairI v02⟩
-      | hasTypePurePerm hW₁ hWΔ₁ d₁' hp₁Γ hp₁Δ =>
-          have hΓ₁' : List.Perm _ Γ₂ := hp₁Γ.trans hΓperm
-          have hb : d₁'.depth
-              + (PureDerivation.hasTypePurePair hG₂ hD₂ d₀₂ d₁₂).depth ≤ n := by
-            simp only [PureDerivation.depth] at hsum ⊢
-            omega
-          rcases ih.pure d₁'
-            (PureDerivation.hasTypePurePair hG₂ hD₂ d₀₂ d₁₂) hΓ₁' hb with
-            hp | ⟨v₁, v₂⟩
-          · exact Or.inl (hp₁Δ.symm.trans hp)
-          · exact Or.inr ⟨PureVanishes.permI v₁, v₂⟩
-  | hasTypePureApp df₂ de₂ =>
-      cases d₁ with
-      | hasTypePureApp df₁ de₁ =>
-          cases df₂ <;> cases df₁
-          all_goals
-            have hb : de₁.depth + de₂.depth ≤ n := by
-              simp only [PureDerivation.depth] at hsum
-              omega
-            rcases ih.pure de₁ de₂ hΓperm hb with h | ⟨v₁, v₂⟩
-            · exact Or.inl h
-            · exact Or.inr ⟨PureVanishes.appI v₁, PureVanishes.appI v₂⟩
-      | hasTypePurePerm hW₁ hWΔ₁ d₁' hp₁Γ hp₁Δ =>
-          have hΓ₁' : List.Perm _ Γ₂ := hp₁Γ.trans hΓperm
-          have hb : d₁'.depth
-              + (PureDerivation.hasTypePureApp df₂ de₂).depth ≤ n := by
-            simp only [PureDerivation.depth] at hsum ⊢
-            omega
-          rcases ih.pure d₁'
-            (PureDerivation.hasTypePureApp df₂ de₂) hΓ₁' hb with
-            hp | ⟨v₁, v₂⟩
-          · exact Or.inl (hp₁Δ.symm.trans hp)
-          · exact Or.inr ⟨PureVanishes.permI v₁, v₂⟩
-  | hasTypeCtrl Ga₂ Ga₂' Da₂ Da₂' l₂ e₀ Tc₂ Tr₂ hW₂ dMix₂ hOrtho₂ dB₂ hEr₂ =>
-      obtain ⟨Ga₁, Ga₁', Da₁, Da₁', l₁, hW₁, dMix₁, hOrtho₁, dB₁, hEr₁,
-        hPΓ₁, hPΔ₁, hLmap₁, hD1₁, hD2₁, hEq₁⟩ :=
-        PureDerivation.ctrl_amplitude d₁ e₀ Tc₂ (l₂.map Prod.fst) rfl
-      have hΓperm' : List.Perm (Ga₁ ++ Ga₁') (Ga₂ ++ Ga₂') := hPΓ₁.trans hΓperm
-      have hdepth : dB₁.depth + dB₂.depth ≤ n := by
-        simp only [PureDerivation.depth] at hsum
-        have m2 : dB₂.depth ≤ Nat.max dMix₂.depth dB₂.depth := Nat.le_max_right _ _
-        omega
-      rcases ih.branch dB₁ dB₂ hLmap₁ hΓperm' hdepth with hperm | ⟨vB₁, vB₂⟩
-      · exact Or.inl (hPΔ₁.symm.trans hperm)
-      · refine Or.inr ⟨?_, PureVanishes.ctrl hW₂ dMix₂ hOrtho₂ dB₂ hEr₂ vB₂⟩
-        intro σ τ v
-        obtain ⟨ρσ, ρτ, -, -, hval⟩ := hEq₁ σ τ v
-        rw [hval]
-        exact vB₁ _ ρσ ρτ v
-  | hasTypePurePerm hW₂ hWΔ₂ d₂' hp₂Γ hp₂Δ =>
-      have hΓ₂' : List.Perm Γ₁ _ := hΓperm.trans hp₂Γ.symm
-      have hb : d₁.depth + d₂'.depth ≤ n := by
-        simp only [PureDerivation.depth] at hsum ⊢
-        omega
-      rcases ih.pure d₁ d₂' hΓ₂' hb with hp | ⟨v₁, v₂⟩
-      · exact Or.inl (hp.trans hp₂Δ)
-      · exact Or.inr ⟨v₁, PureVanishes.permI v₂⟩
-
-/-- Successor step for the `branch` field of context determination. -/
-theorem ctxDet_branch_step {n : Nat} (ih : CtxDetPB n) :
-    ∀ {Γa Γa' Δa Δa' Γb Γb' Δb Δb' : Context}
-      {la lb : List ((Expression × Expression) × Context)} {T T' : DataType}
-      (b₁ : BranchDerivation Γa Γa' Δa Δa' la T T')
-      (b₂ : BranchDerivation Γb Γb' Δb Δb' lb T T'),
-      la.map Prod.fst = lb.map Prod.fst →
-      List.Perm (Γa ++ Γa') (Γb ++ Γb') →
-      b₁.depth + b₂.depth ≤ n + 1 →
-      List.Perm (Δa ++ Δa') (Δb ++ Δb') ∨ (BranchVanishes b₁ ∧ BranchVanishes b₂) := by
-  intro Γa Γa' Δa Δa' Γb Γb' Δb Δb' la lb T T' b₁ b₂ hmap hΓperm hsum
-  revert hmap
-  cases b₂ with
-  | nil _ _ _ _ _ _ =>
-      cases b₁ with
-      | nil _ _ _ _ _ _ =>
-          intro _
-          exact Or.inr ⟨BranchVanishes.nil, BranchVanishes.nil⟩
-      | cons _ _ _ =>
-          intro hmap
-          exact absurd hmap (by simp)
-  | cons dPat₂ dBody₂ b₂' =>
-      cases b₁ with
-      | nil _ _ _ _ _ _ =>
-          intro hmap
-          exact absurd hmap (by simp)
-      | cons dPat₁ dBody₁ b₁' =>
-          intro hmap
-          simp only [List.map_cons, List.cons.injEq, Prod.mk.injEq] at hmap
-          obtain ⟨⟨he, he'⟩, htail⟩ := hmap
-          subst he
-          subst he'
-          have hdepths : dPat₁.depth + dPat₂.depth ≤ n
-              ∧ dBody₁.depth + dBody₂.depth ≤ n
-              ∧ b₁'.depth + b₂'.depth ≤ n := by
-            simp only [BranchDerivation.depth] at hsum
-            have a1 : dPat₁.depth
-                ≤ Nat.max dPat₁.depth dBody₁.depth := Nat.le_max_left _ _
-            have a2 : dBody₁.depth
-                ≤ Nat.max dPat₁.depth dBody₁.depth := Nat.le_max_right _ _
-            have a3 : Nat.max dPat₁.depth dBody₁.depth
-                ≤ Nat.max (Nat.max dPat₁.depth dBody₁.depth) b₁'.depth :=
-              Nat.le_max_left _ _
-            have b1 : dPat₂.depth
-                ≤ Nat.max dPat₂.depth dBody₂.depth := Nat.le_max_left _ _
-            have b2 : dBody₂.depth
-                ≤ Nat.max dPat₂.depth dBody₂.depth := Nat.le_max_right _ _
-            have b3 : Nat.max dPat₂.depth dBody₂.depth
-                ≤ Nat.max (Nat.max dPat₂.depth dBody₂.depth) b₂'.depth :=
-              Nat.le_max_left _ _
-            omega
-          obtain ⟨hpat, hbody, htaild⟩ := hdepths
-          rcases ih.pure dPat₁ dPat₂ (List.Perm.refl []) hpat with
-            hpatperm | ⟨vp₁, vp₂⟩
-          · rcases ih.pure dBody₁ dBody₂ (hΓperm.append hpatperm) hbody with
-              hbodyperm | ⟨vb₁, vb₂⟩
-            · exact Or.inl hbodyperm
-            · rcases ih.branch b₁' b₂' htail hΓperm htaild with
-                htailperm | ⟨vt₁, vt₂⟩
-              · exact Or.inl htailperm
-              · exact Or.inr
-                  ⟨BranchVanishes.cons dPat₁ dBody₁ b₁' vb₁ vt₁,
-                   BranchVanishes.cons dPat₂ dBody₂ b₂' vb₂ vt₂⟩
-          · rcases ih.branch b₁' b₂' htail hΓperm htaild with
-              htailperm | ⟨vt₁, vt₂⟩
-            · exact Or.inl htailperm
-            · exact Or.inr
-                ⟨BranchVanishes.cons_of_pat dPat₁ dBody₁ b₁' vp₁ vt₁,
-                 BranchVanishes.cons_of_pat dPat₂ dBody₂ b₂' vp₂ vt₂⟩
-
-/-- The source type of a program is fixed by its expression, whether it is
-typed coherently or as a channel. -/
-theorem ProgramDerivation.coherent_channel_input_eq {f : Program}
-    {S₁ S₂ T₁ T₂ : DataType}
-    (d₁ : ProgramDerivation f (S₁ ⇝ T₁))
-    (d₂ : ProgramDerivation f (S₂ ⇛ T₂)) : S₁ = S₂ := by
-  cases d₁ with
-  | hasTypeGate => cases d₂ with | hasTypeChannel d => cases d; rfl
-  | hasTypeLeft => cases d₂ with | hasTypeChannel d => cases d; rfl
-  | hasTypeRight => cases d₂ with | hasTypeChannel d => cases d; rfl
-  | hasCoherentTypeAbs dp dq =>
-      cases d₂ with
-      | hasTypeChannel d =>
-          cases d with
-          | hasCoherentTypeAbs _ _ => rfl
-      | hasChannelTypeAbs dp' dm' => rfl
-  | hasTypeRphase dp =>
-      cases d₂ with
-      | hasTypeChannel d =>
-          cases d with
-          | hasTypeRphase _ => rfl
-
-/-- Successor context determination for a pure derivation at empty classical
-context against a mixed derivation. -/
-theorem ctxDet_pureMixed_step {n : Nat} (ih : CtxDetPM n) :
-    ∀ {Γ₁ Δ₁ Δ₂ : Context} {e : Expression} {T : DataType}
-      (d₁ : PureDerivation Γ₁ Δ₁ e T) (d₂ : MixedDerivation Δ₂ e T),
-      Γ₁ = [] → d₁.depth + d₂.depth ≤ n + 1 →
-      List.Perm Δ₁ Δ₂ ∨ (PureVanishes d₁ ∧ MixedVanishes d₂) := by
-  intro Γ₁ Δ₁ Δ₂ e T d₁ d₂ hΓ hsum
-  cases d₂ with
-  | hasMixedTypePerm hW₂ d₂' hperm₂ =>
-      have hb : d₁.depth + d₂'.depth ≤ n := by
-        simp only [MixedDerivation.depth] at hsum
-        omega
-      rcases ih.pureMixed d₁ d₂' hΓ hb with hp | ⟨hpv, hmv⟩
-      · exact Or.inl (hp.trans hperm₂)
-      · exact Or.inr ⟨hpv, MixedVanishes.of_perm hW₂ d₂' hperm₂ hmv⟩
-  | hasTypeMix hW₂ dp₂ =>
-      have hb : d₁.depth + dp₂.depth ≤ n := by
-        simp only [MixedDerivation.depth] at hsum
-        omega
-      rcases ih.pb.pure d₁ dp₂ (by simp [hΓ]) hb with hp | ⟨hpv, hpv₂⟩
-      · exact Or.inl hp
-      · exact Or.inr ⟨hpv, MixedVanishes.hasTypeMix hW₂ dp₂ hpv₂⟩
-  | hasMixedTypePair hW₂ d₀₂ d₁₂ =>
-      cases d₁ with
-      | hasTypePurePerm hWΓ hWΔ d₁' hΓ' hΔ' =>
-          have hΓnil : List.Perm _ [] := hΓ ▸ hΓ'
-          have hΓinner := List.Perm.eq_nil hΓnil
-          cases hΓinner
-          cases hΓ
-          have hb : d₁'.depth
-              + (MixedDerivation.hasMixedTypePair hW₂ d₀₂ d₁₂).depth ≤ n := by
-            simp only [PureDerivation.depth, MixedDerivation.depth] at hsum ⊢
-            omega
-          rcases ih.pureMixed d₁' (MixedDerivation.hasMixedTypePair hW₂ d₀₂ d₁₂)
-              rfl hb with hp | ⟨hpv, hmv⟩
-          · exact Or.inl (hΔ'.symm.trans hp)
-          · exact Or.inr ⟨PureVanishes.permI hpv, hmv⟩
-      | hasTypePurePair hG₁ hD₁ d₀₁ d₁₁ =>
-          cases hΓ
-          have hdepths : d₀₁.depth + d₀₂.depth ≤ n
-              ∧ d₁₁.depth + d₁₂.depth ≤ n := by
-            simp only [PureDerivation.depth, MixedDerivation.depth] at hsum
-            have m₁ := Nat.le_max_left d₀₁.depth d₁₁.depth
-            have m₂ := Nat.le_max_right d₀₁.depth d₁₁.depth
-            have m₃ := Nat.le_max_left d₀₂.depth d₁₂.depth
-            have m₄ := Nat.le_max_right d₀₂.depth d₁₂.depth
-            omega
-          obtain ⟨hb₀, hb₁⟩ := hdepths
-          rcases ih.pureMixed d₀₁ d₀₂ rfl hb₀ with h₀ | ⟨vp₀, vm₀⟩
-          · rcases ih.pureMixed d₁₁ d₁₂ rfl hb₁ with h₁ | ⟨vp₁, vm₁⟩
-            · exact Or.inl (List.Perm.pair_combine hD₁.nodup hW₂.nodup h₀ h₁)
-            · exact Or.inr
-                ⟨PureVanishes.pairIr vp₁, MixedVanishes.pair_right hW₂ d₀₂ d₁₂ vm₁⟩
-          · exact Or.inr
-              ⟨PureVanishes.pairI vp₀, MixedVanishes.pair_left hW₂ d₀₂ d₁₂ vm₀⟩
-  | hasTypeTry hW₂ d₀₂ d₁₂ =>
-      exact False.elim (PureDerivation.no_try d₁)
-  | hasMixedTypeApp df₂ de₂ =>
-      cases d₁ with
-      | hasTypePurePerm hWΓ hWΔ d₁' hΓ' hΔ' =>
-          have hΓnil : List.Perm _ [] := hΓ ▸ hΓ'
-          have hΓinner := List.Perm.eq_nil hΓnil
-          cases hΓinner
-          cases hΓ
-          have hb : d₁'.depth
-              + (MixedDerivation.hasMixedTypeApp df₂ de₂).depth ≤ n := by
-            simp only [PureDerivation.depth, MixedDerivation.depth] at hsum ⊢
-            omega
-          rcases ih.pureMixed d₁' (MixedDerivation.hasMixedTypeApp df₂ de₂)
-              rfl hb with hp | ⟨hpv, hmv⟩
-          · exact Or.inl (hΔ'.symm.trans hp)
-          · exact Or.inr ⟨PureVanishes.permI hpv, hmv⟩
-      | hasTypePureApp df₁ de₁ =>
-          cases hΓ
-          have hS := ProgramDerivation.coherent_channel_input_eq df₁ df₂
-          cases hS
-          have hb : de₁.depth + de₂.depth ≤ n := by
-            simp only [PureDerivation.depth, MixedDerivation.depth] at hsum
-            omega
-          rcases ih.pureMixed de₁ de₂ rfl hb with hΔ | ⟨hpv, hmv⟩
-          · exact Or.inl hΔ
-          · exact Or.inr
-              ⟨PureVanishes.appI hpv, MixedVanishes.app df₂ de₂ hmv⟩
-
-/-- Base case for `CtxDetPB`, extracted from `ctxDet_base`. -/
-theorem ctxDetPB_base : CtxDetPB 0 where
-  pure := ctxDet_base.pure
-  branch := ctxDet_base.branch
-
-/-- Context determination for pure/`branch`, at every depth. -/
-theorem ctxDetPB_all (n : Nat) : CtxDetPB n := by
-  induction n with
-  | zero => exact ctxDetPB_base
-  | succ n ih => exact ⟨ctxDet_pure_step ih, ctxDet_branch_step ih⟩
-
-theorem ctxDetPM_base : CtxDetPM 0 where
-  pb := ctxDetPB_base
-  pureMixed := ctxDet_base.pureMixed
-
-theorem ctxDetPM_all (n : Nat) : CtxDetPM n := by
-  induction n with
-  | zero => exact ctxDetPM_base
-  | succ n ih =>
-      exact ⟨ctxDetPB_all (n + 1), ctxDet_pureMixed_step ih⟩
-
-/-! ## The refined equivalence family
-
-Appendix G of the paper compares *equivalent proofs* (Definition G.2): two
-proofs of the same judgment in which every context decomposition chosen by a
-rule is recorded, so that equivalent proofs use corresponding decompositions,
-up to permutation of each component.  This matters for `try` (its trace
-tests are taken along each side's own decomposition) and equally for
-`purePair` and `ctrl`, whose decompositions are free rule data.
-
-The three judgments are mutually recursive, so the relations are too: the
-`mix` rule of the mixed judgment records a *pure* equivalence between its
-two pure sub-proofs; the `ctrl` rule of the pure judgment records a *mixed*
-equivalence between its control sub-proofs together with a *branch*
-equivalence between its branch lists; each branch records pure equivalences
-for its pattern and body.  The relations are proof-relevant (in `Type`) so
-that they can carry the componentwise permutations that the transports below
-use to map valuations between the two sides.
-
-`PureEqv` relates derivations of possibly different expressions only through
-its constructors, which pin the correspondence themselves.  The one place
-where the judgment does not pin the expression index is `ctrl`, whose
-expression determines only `l.map Prod.fst`, so the `ctrl` constructor
-carries that equality as a premise. -/
-
 mutual
+  inductive PureEqv : {Γ₁ Δ₁ Γ₂ Δ₂ : Context} → {e₁ e₂ : Expression} →
+      {T : DataType} → PureDerivation Γ₁ Δ₁ e₁ T → PureDerivation Γ₂ Δ₂ e₂ T →
+      Type where
+    | unit {Γ₁ Γ₂ : Context} {hW₁ : Context.WellFormed Γ₁}
+        {hW₂ : Context.WellFormed Γ₂} (hΓ : List.Perm Γ₁ Γ₂) :
+        PureEqv (.hasTypeUnit hW₁) (.hasTypeUnit hW₂)
+    | cvar {Γa₁ Γb₁ Γa₂ Γb₂ : Context} {x : Variable} {T : DataType}
+        {hW₁ : Context.WellFormed (Γa₁ ++ [(x, T)] ++ Γb₁)}
+        {hW₂ : Context.WellFormed (Γa₂ ++ [(x, T)] ++ Γb₂)}
+        (hΓ : List.Perm (Γa₁ ++ [(x, T)] ++ Γb₁) (Γa₂ ++ [(x, T)] ++ Γb₂)) :
+        PureEqv (.hasTypeCVar hW₁) (.hasTypeCVar hW₂)
+    | qvar {Γ₁ Γ₂ : Context} {x : Variable} {T : DataType}
+        {hW₁ : Context.WellFormed Γ₁} {hW₂ : Context.WellFormed Γ₂}
+        {hx₁ : x ∉ Context.dom Γ₁} {hx₂ : x ∉ Context.dom Γ₂}
+        (hΓ : List.Perm Γ₁ Γ₂) :
+        PureEqv (.hasTypeQVar (x := x) (T := T) hW₁ hx₁)
+            (.hasTypeQVar (x := x) (T := T) hW₂ hx₂)
+    | purePair {Γ₁ Γ₂ Δ Δ₀ Δ₁ Δ' Δ₀' Δ₁' : Context} {e₀ e₁ : Expression}
+        {T₀ T₁ : DataType}
+        {hWΓ₁ : Context.WellFormed Γ₁} {hWΓ₂ : Context.WellFormed Γ₂}
+        {hWΔ₁ : Context.WellFormed (Δ ++ Δ₀ ++ Δ₁)}
+        {hWΔ₂ : Context.WellFormed (Δ' ++ Δ₀' ++ Δ₁')}
+        (hΓ : List.Perm Γ₁ Γ₂) (hΔ : List.Perm Δ Δ')
+        (h₀ : List.Perm Δ₀ Δ₀') (h₁ : List.Perm Δ₁ Δ₁')
+        {d₀ : PureDerivation Γ₁ (Δ ++ Δ₀) e₀ T₀}
+        {d₁ : PureDerivation Γ₁ (Δ ++ Δ₁) e₁ T₁}
+        {d₀' : PureDerivation Γ₂ (Δ' ++ Δ₀') e₀ T₀}
+        {d₁' : PureDerivation Γ₂ (Δ' ++ Δ₁') e₁ T₁}
+        (r₀ : PureEqv d₀ d₀') (r₁ : PureEqv d₁ d₁') :
+        PureEqv (.hasTypePurePair hWΓ₁ hWΔ₁ d₀ d₁)
+            (.hasTypePurePair hWΓ₂ hWΔ₂ d₀' d₁')
+    | ctrl {Γ₁ Γ₁' Δ₁ Δ₁' G₂ G₂' D₂ D₂' : Context} {e : Expression}
+        {T T' : DataType} {l₁ l₂ : List ((Expression × Expression) × Context)}
+        {hW₁ : Context.WellFormed (Γ₁ ++ Γ₁' ++ Δ₁ ++ Δ₁')}
+        {hW₂ : Context.WellFormed (G₂ ++ G₂' ++ D₂ ++ D₂')}
+        (hl : l₁.map Prod.fst = l₂.map Prod.fst)
+        (hΓ : List.Perm Γ₁ G₂) (hΓ' : List.Perm Γ₁' G₂')
+        (hΔ : List.Perm Δ₁ D₂) (hΔ' : List.Perm Δ₁' D₂')
+        {dMix₁ : MixedDerivation (Γ₁ ++ Δ₁) e T}
+        {dMix₂ : MixedDerivation (G₂ ++ D₂) e T}
+        (r : MixedEqv dMix₁ dMix₂)
+        {hO₁ : Ortho T (l₁.map (Prod.fst ∘ Prod.fst))}
+        {hO₂ : Ortho T (l₂.map (Prod.fst ∘ Prod.fst))}
+        {hE₁ : ∀ x, x ∈ Context.dom Δ₁ →
+            Erases x T' (l₁.map (Prod.snd ∘ Prod.fst))}
+        {hE₂ : ∀ x, x ∈ Context.dom D₂ →
+            Erases x T' (l₂.map (Prod.snd ∘ Prod.fst))}
+        {dB₁ : BranchDerivation Γ₁ Γ₁' Δ₁ Δ₁' l₁ T T'}
+        {dB₂ : BranchDerivation G₂ G₂' D₂ D₂' l₂ T T'}
+        (rb : BranchEqv hΓ hΓ' hΔ hΔ' dB₁ dB₂) :
+        PureEqv (.hasTypeCtrl Γ₁ Γ₁' Δ₁ Δ₁' l₁ e T T' hW₁ dMix₁ hO₁ dB₁ hE₁)
+            (.hasTypeCtrl G₂ G₂' D₂ D₂' l₂ e T T' hW₂ dMix₂ hO₂ dB₂ hE₂)
+    | pureApp {Γ₁ Δ₁ Γ₂ Δ₂ : Context} {e : Expression} {f : Program}
+        {T T' : DataType}
+        {df₁ df₂ : ProgramDerivation f (T ⇝ T')}
+        {de₁ : PureDerivation Γ₁ Δ₁ e T} {de₂ : PureDerivation Γ₂ Δ₂ e T}
+        (hΓ : List.Perm Γ₁ Γ₂) (hΔ : List.Perm Δ₁ Δ₂)
+        (hprog : programAmplitude df₁ = programAmplitude df₂)
+        (r : PureEqv de₁ de₂) :
+        PureEqv (.hasTypePureApp df₁ de₁) (.hasTypePureApp df₂ de₂)
+    | permL {Γ₁ Γ₁' Δ₁ Δ₁' Γ₂ Δ₂ : Context} {e : Expression} {T : DataType}
+        {hWΓ : Context.WellFormed Γ₁'} {hWΔ : Context.WellFormed Δ₁'}
+        {d₁ : PureDerivation Γ₁ Δ₁ e T} {d₂ : PureDerivation Γ₂ Δ₂ e T}
+        (hΓ : List.Perm Γ₁ Γ₁') (hΔ : List.Perm Δ₁ Δ₁')
+        (r : PureEqv d₁ d₂) :
+        PureEqv (.hasTypePurePerm hWΓ hWΔ d₁ hΓ hΔ) d₂
+    | permR {Γ₁ Δ₁ Γ₂ Γ₂' Δ₂ Δ₂' : Context} {e : Expression} {T : DataType}
+        {hWΓ : Context.WellFormed Γ₂'} {hWΔ : Context.WellFormed Δ₂'}
+        {d₁ : PureDerivation Γ₁ Δ₁ e T} {d₂ : PureDerivation Γ₂ Δ₂ e T}
+        (r : PureEqv d₁ d₂)
+        (hΓ : List.Perm Γ₂ Γ₂') (hΔ : List.Perm Δ₂ Δ₂') :
+        PureEqv d₁ (.hasTypePurePerm hWΓ hWΔ d₂ hΓ hΔ)
 
-/-- Equivalent pure proofs: the rule-chosen decompositions (`purePair`'s
-context split, `ctrl`'s four-way split) correspond componentwise up to
-permutation, and every sub-derivation carries its own equivalence witness. -/
-inductive PureEqv : {Γ₁ Δ₁ Γ₂ Δ₂ : Context} → {e₁ e₂ : Expression} →
-    {T : DataType} → PureDerivation Γ₁ Δ₁ e₁ T → PureDerivation Γ₂ Δ₂ e₂ T →
-    Type where
-  | unit {Γ₁ Γ₂ : Context} {hW₁ : Context.WellFormed Γ₁}
-      {hW₂ : Context.WellFormed Γ₂} (hΓ : List.Perm Γ₁ Γ₂) :
-      PureEqv (.hasTypeUnit hW₁) (.hasTypeUnit hW₂)
-  | cvar {Γa₁ Γb₁ Γa₂ Γb₂ : Context} {x : Variable} {T : DataType}
-      {hW₁ : Context.WellFormed (Γa₁ ++ [(x, T)] ++ Γb₁)}
-      {hW₂ : Context.WellFormed (Γa₂ ++ [(x, T)] ++ Γb₂)}
-      (hΓ : List.Perm (Γa₁ ++ [(x, T)] ++ Γb₁) (Γa₂ ++ [(x, T)] ++ Γb₂)) :
-      PureEqv (.hasTypeCVar hW₁) (.hasTypeCVar hW₂)
-  | qvar {Γ₁ Γ₂ : Context} {x : Variable} {T : DataType}
-      {hW₁ : Context.WellFormed Γ₁} {hW₂ : Context.WellFormed Γ₂}
-      {hx₁ : x ∉ Context.dom Γ₁} {hx₂ : x ∉ Context.dom Γ₂}
-      (hΓ : List.Perm Γ₁ Γ₂) :
-      PureEqv (.hasTypeQVar (x := x) (T := T) hW₁ hx₁)
-          (.hasTypeQVar (x := x) (T := T) hW₂ hx₂)
-  | purePair {Γ₁ Γ₂ Δ Δ₀ Δ₁ Δ' Δ₀' Δ₁' : Context} {e₀ e₁ : Expression}
-      {T₀ T₁ : DataType}
-      {hWΓ₁ : Context.WellFormed Γ₁} {hWΓ₂ : Context.WellFormed Γ₂}
-      {hWΔ₁ : Context.WellFormed (Δ ++ Δ₀ ++ Δ₁)}
-      {hWΔ₂ : Context.WellFormed (Δ' ++ Δ₀' ++ Δ₁')}
-      (hΓ : List.Perm Γ₁ Γ₂) (hΔ : List.Perm Δ Δ')
-      (h₀ : List.Perm Δ₀ Δ₀') (h₁ : List.Perm Δ₁ Δ₁')
-      {d₀ : PureDerivation Γ₁ (Δ ++ Δ₀) e₀ T₀}
-      {d₁ : PureDerivation Γ₁ (Δ ++ Δ₁) e₁ T₁}
-      {d₀' : PureDerivation Γ₂ (Δ' ++ Δ₀') e₀ T₀}
-      {d₁' : PureDerivation Γ₂ (Δ' ++ Δ₁') e₁ T₁}
-      (r₀ : PureEqv d₀ d₀') (r₁ : PureEqv d₁ d₁') :
-      PureEqv (.hasTypePurePair hWΓ₁ hWΔ₁ d₀ d₁)
-          (.hasTypePurePair hWΓ₂ hWΔ₂ d₀' d₁')
-  | ctrl {Γ₁ Γ₁' Δ₁ Δ₁' G₂ G₂' D₂ D₂' : Context} {e : Expression}
-      {T T' : DataType} {l₁ l₂ : List ((Expression × Expression) × Context)}
-      {hW₁ : Context.WellFormed (Γ₁ ++ Γ₁' ++ Δ₁ ++ Δ₁')}
-      {hW₂ : Context.WellFormed (G₂ ++ G₂' ++ D₂ ++ D₂')}
-      (hl : l₁.map Prod.fst = l₂.map Prod.fst)
-      (hΓ : List.Perm Γ₁ G₂) (hΓ' : List.Perm Γ₁' G₂')
-      (hΔ : List.Perm Δ₁ D₂) (hΔ' : List.Perm Δ₁' D₂')
-      {dMix₁ : MixedDerivation (Γ₁ ++ Δ₁) e T}
-      {dMix₂ : MixedDerivation (G₂ ++ D₂) e T}
-      (r : MixedEqv dMix₁ dMix₂)
-      {hO₁ : Ortho T (l₁.map (Prod.fst ∘ Prod.fst))}
-      {hO₂ : Ortho T (l₂.map (Prod.fst ∘ Prod.fst))}
-      {hE₁ : ∀ x, x ∈ Context.dom Δ₁ →
-          Erases x T' (l₁.map (Prod.snd ∘ Prod.fst))}
-      {hE₂ : ∀ x, x ∈ Context.dom D₂ →
-          Erases x T' (l₂.map (Prod.snd ∘ Prod.fst))}
-      {dB₁ : BranchDerivation Γ₁ Γ₁' Δ₁ Δ₁' l₁ T T'}
-      {dB₂ : BranchDerivation G₂ G₂' D₂ D₂' l₂ T T'}
-      (rb : BranchEqv hΓ hΓ' hΔ hΔ' dB₁ dB₂) :
-      PureEqv (.hasTypeCtrl Γ₁ Γ₁' Δ₁ Δ₁' l₁ e T T' hW₁ dMix₁ hO₁ dB₁ hE₁)
-          (.hasTypeCtrl G₂ G₂' D₂ D₂' l₂ e T T' hW₂ dMix₂ hO₂ dB₂ hE₂)
-  | pureApp {Γ₁ Δ₁ Γ₂ Δ₂ : Context} {e : Expression} {f : Program}
-      {T T' : DataType}
-      {df₁ df₂ : ProgramDerivation f (T ⇝ T')}
-      {de₁ : PureDerivation Γ₁ Δ₁ e T} {de₂ : PureDerivation Γ₂ Δ₂ e T}
-      (hΓ : List.Perm Γ₁ Γ₂) (hΔ : List.Perm Δ₁ Δ₂)
-      (hprog : programAmplitude df₁ = programAmplitude df₂)
-      (r : PureEqv de₁ de₂) :
-      PureEqv (.hasTypePureApp df₁ de₁) (.hasTypePureApp df₂ de₂)
-  | permL {Γ₁ Γ₁' Δ₁ Δ₁' Γ₂ Δ₂ : Context} {e : Expression} {T : DataType}
-      {hWΓ : Context.WellFormed Γ₁'} {hWΔ : Context.WellFormed Δ₁'}
-      {d₁ : PureDerivation Γ₁ Δ₁ e T} {d₂ : PureDerivation Γ₂ Δ₂ e T}
-      (hΓ : List.Perm Γ₁ Γ₁') (hΔ : List.Perm Δ₁ Δ₁')
-      (r : PureEqv d₁ d₂) :
-      PureEqv (.hasTypePurePerm hWΓ hWΔ d₁ hΓ hΔ) d₂
-  | permR {Γ₁ Δ₁ Γ₂ Γ₂' Δ₂ Δ₂' : Context} {e : Expression} {T : DataType}
-      {hWΓ : Context.WellFormed Γ₂'} {hWΔ : Context.WellFormed Δ₂'}
-      {d₁ : PureDerivation Γ₁ Δ₁ e T} {d₂ : PureDerivation Γ₂ Δ₂ e T}
-      (r : PureEqv d₁ d₂)
-      (hΓ : List.Perm Γ₂ Γ₂') (hΔ : List.Perm Δ₂ Δ₂') :
-      PureEqv d₁ (.hasTypePurePerm hWΓ hWΔ d₂ hΓ hΔ)
+  /-- Equivalent mixed proofs: same expression and type, with rule-chosen
+  context decompositions corresponding componentwise up to permutation.  The
+  `mix` constructor additionally records a pure equivalence between the two
+  pure sub-proofs. -/
+  inductive MixedEqv : {Δ₁ Δ₂ : Context} → {e : Expression} → {T : DataType} →
+      MixedDerivation Δ₁ e T → MixedDerivation Δ₂ e T → Type where
+    | mix {Δ₁ Δ₂ : Context} {e : Expression} {T : DataType}
+        {hW₁ : Context.WellFormed Δ₁} {hW₂ : Context.WellFormed Δ₂}
+        (h : List.Perm Δ₁ Δ₂)
+        (dp₁ : PureDerivation [] Δ₁ e T) (dp₂ : PureDerivation [] Δ₂ e T)
+        (pq : PureEqv dp₁ dp₂) :
+        MixedEqv (.hasTypeMix hW₁ dp₁) (.hasTypeMix hW₂ dp₂)
+    | permL {Δ₁ Δ₁' Δ₂ : Context} {e : Expression} {T : DataType}
+        {hW : Context.WellFormed Δ₁'}
+        {d₁ : MixedDerivation Δ₁ e T} {d₂ : MixedDerivation Δ₂ e T}
+        (h' : List.Perm Δ₁ Δ₁') (r : MixedEqv d₁ d₂) :
+        MixedEqv (.hasMixedTypePerm hW d₁ h') d₂
+    | permR {Δ₁ Δ₂ Δ₂' : Context} {e : Expression} {T : DataType}
+        {hW : Context.WellFormed Δ₂'}
+        {d₁ : MixedDerivation Δ₁ e T} {d₂ : MixedDerivation Δ₂ e T}
+        (r : MixedEqv d₁ d₂) (h' : List.Perm Δ₂ Δ₂') :
+        MixedEqv d₁ (.hasMixedTypePerm hW d₂ h')
+    | pair {Δ Δ₀ Δ₁ Δ' Δ₀' Δ₁' : Context} {e₀ e₁ : Expression} {T₀ T₁ : DataType}
+        {hW₁ : Context.WellFormed (Δ ++ Δ₀ ++ Δ₁)}
+        {hW₂ : Context.WellFormed (Δ' ++ Δ₀' ++ Δ₁')}
+        (hΔ : List.Perm Δ Δ') (h₀ : List.Perm Δ₀ Δ₀') (h₁ : List.Perm Δ₁ Δ₁')
+        {d₀ : MixedDerivation (Δ ++ Δ₀) e₀ T₀} {d₁ : MixedDerivation (Δ ++ Δ₁) e₁ T₁}
+        {d₀' : MixedDerivation (Δ' ++ Δ₀') e₀ T₀} {d₁' : MixedDerivation (Δ' ++ Δ₁') e₁ T₁}
+        (r₀ : MixedEqv d₀ d₀') (r₁ : MixedEqv d₁ d₁') :
+        MixedEqv (.hasMixedTypePair hW₁ d₀ d₁) (.hasMixedTypePair hW₂ d₀' d₁')
+    | mtry {Δ₀ Δ₁ Δ₀' Δ₁' : Context} {e₀ e₁ : Expression} {T : DataType}
+        {hW₁ : Context.WellFormed (Δ₀ ++ Δ₁)}
+        {hW₂ : Context.WellFormed (Δ₀' ++ Δ₁')}
+        (h₀ : List.Perm Δ₀ Δ₀') (h₁ : List.Perm Δ₁ Δ₁')
+        {d₀ : MixedDerivation Δ₀ e₀ T} {d₁ : MixedDerivation Δ₁ e₁ T}
+        {d₀' : MixedDerivation Δ₀' e₀ T} {d₁' : MixedDerivation Δ₁' e₁ T}
+        (r₀ : MixedEqv d₀ d₀') (r₁ : MixedEqv d₁ d₁') :
+        MixedEqv (.hasTypeTry hW₁ d₀ d₁) (.hasTypeTry hW₂ d₀' d₁')
+    | app {Δ Δ' : Context} {e : Expression} {f : Program} {T T' : DataType}
+        {df₁ df₂ : ProgramDerivation f (T ⇛ T')}
+        {de₁ : MixedDerivation Δ e T} {de₂ : MixedDerivation Δ' e T}
+        (hprog : programAmplitude df₁ = programAmplitude df₂)
+        (r : MixedEqv de₁ de₂) :
+        MixedEqv (.hasMixedTypeApp df₁ de₁) (.hasMixedTypeApp df₂ de₂)
+    /-- The cross case `T-Mix`/`T-MixedPair`: a mixed proof obtained by mixing a
+    *literal* pure pair proof is equivalent to a mixed pair proof of the same
+    expression, provided each pair component's mixed proof is equivalent to the
+    mixture of the corresponding pure component.  The two decompositions are
+    related by the recorded permutations `hΔ`, `h₀`, `h₁` (the paper's
+    `𝜋₂`, `𝜋₂⁰`, `𝜋₂¹`).  The pure components are written at the literal
+    pair's split, matching the `T-Pair` normal form of a pure pair proof. -/
+    | mixPair {Δ Δ₀ Δ₁ Δs Δ₀s Δ₁s : Context} {e₀ e₁ : Expression}
+        {T₀ T₁ : DataType}
+        {hWs : Context.WellFormed ((Δs ++ Δ₀s) ++ Δ₁s)}
+        {hW : Context.WellFormed ((Δ ++ Δ₀) ++ Δ₁)}
+        {hW₀s : Context.WellFormed (Δs ++ Δ₀s)}
+        {hW₁s : Context.WellFormed (Δs ++ Δ₁s)}
+        {dp₀ : PureDerivation [] (Δs ++ Δ₀s) e₀ T₀}
+        {dp₁ : PureDerivation [] (Δs ++ Δ₁s) e₁ T₁}
+        (hΔ : List.Perm Δs Δ) (h₀ : List.Perm Δ₀s Δ₀) (h₁ : List.Perm Δ₁s Δ₁)
+        {d₀ : MixedDerivation (Δ ++ Δ₀) e₀ T₀}
+        {d₁ : MixedDerivation (Δ ++ Δ₁) e₁ T₁}
+        (r₀ : MixedEqv (.hasTypeMix hW₀s dp₀) d₀)
+        (r₁ : MixedEqv (.hasTypeMix hW₁s dp₁) d₁) :
+        MixedEqv (.hasTypeMix hWs (.hasTypePurePair Context.WellFormed.nil hWs dp₀ dp₁))
+            (.hasMixedTypePair hW d₀ d₁)
+    /-- The cross case `T-Mix`/`T-MixedApp`: a mixed proof obtained by mixing a
+    *literal* pure application proof is equivalent to a mixed application proof
+    whose program is the channel (pure) form of the same program, provided the
+    mixed argument proof is equivalent to the mixture of the pure argument. -/
+    | mixApp {Δd Δ : Context} {e : Expression} {f : Program} {T T' : DataType}
+        {hWd : Context.WellFormed Δd}
+        {dp₀ : PureDerivation [] Δd e T}
+        {df : ProgramDerivation f (T ⇝ T')}
+        {de : MixedDerivation Δ e T}
+        (r : MixedEqv (.hasTypeMix hWd dp₀) de) :
+        MixedEqv (.hasTypeMix hWd (.hasTypePureApp df dp₀))
+            (.hasMixedTypeApp (.hasTypeChannel df) de)
 
-/-- Equivalent mixed proofs: same expression and type, with rule-chosen
-context decompositions corresponding componentwise up to permutation.  The
-`mix` constructor additionally records a pure equivalence between the two
-pure sub-proofs. -/
-inductive MixedEqv : {Δ₁ Δ₂ : Context} → {e : Expression} → {T : DataType} →
-    MixedDerivation Δ₁ e T → MixedDerivation Δ₂ e T → Type where
-  | mix {Δ₁ Δ₂ : Context} {e : Expression} {T : DataType}
-      {hW₁ : Context.WellFormed Δ₁} {hW₂ : Context.WellFormed Δ₂}
-      (h : List.Perm Δ₁ Δ₂)
-      (dp₁ : PureDerivation [] Δ₁ e T) (dp₂ : PureDerivation [] Δ₂ e T)
-      (pq : PureEqv dp₁ dp₂) :
-      MixedEqv (.hasTypeMix hW₁ dp₁) (.hasTypeMix hW₂ dp₂)
-  | permL {Δ₁ Δ₁' Δ₂ : Context} {e : Expression} {T : DataType}
-      {hW : Context.WellFormed Δ₁'}
-      {d₁ : MixedDerivation Δ₁ e T} {d₂ : MixedDerivation Δ₂ e T}
-      (h' : List.Perm Δ₁ Δ₁') (r : MixedEqv d₁ d₂) :
-      MixedEqv (.hasMixedTypePerm hW d₁ h') d₂
-  | permR {Δ₁ Δ₂ Δ₂' : Context} {e : Expression} {T : DataType}
-      {hW : Context.WellFormed Δ₂'}
-      {d₁ : MixedDerivation Δ₁ e T} {d₂ : MixedDerivation Δ₂ e T}
-      (r : MixedEqv d₁ d₂) (h' : List.Perm Δ₂ Δ₂') :
-      MixedEqv d₁ (.hasMixedTypePerm hW d₂ h')
-  | pair {Δ Δ₀ Δ₁ Δ' Δ₀' Δ₁' : Context} {e₀ e₁ : Expression} {T₀ T₁ : DataType}
-      {hW₁ : Context.WellFormed (Δ ++ Δ₀ ++ Δ₁)}
-      {hW₂ : Context.WellFormed (Δ' ++ Δ₀' ++ Δ₁')}
-      (hΔ : List.Perm Δ Δ') (h₀ : List.Perm Δ₀ Δ₀') (h₁ : List.Perm Δ₁ Δ₁')
-      {d₀ : MixedDerivation (Δ ++ Δ₀) e₀ T₀} {d₁ : MixedDerivation (Δ ++ Δ₁) e₁ T₁}
-      {d₀' : MixedDerivation (Δ' ++ Δ₀') e₀ T₀} {d₁' : MixedDerivation (Δ' ++ Δ₁') e₁ T₁}
-      (r₀ : MixedEqv d₀ d₀') (r₁ : MixedEqv d₁ d₁') :
-      MixedEqv (.hasMixedTypePair hW₁ d₀ d₁) (.hasMixedTypePair hW₂ d₀' d₁')
-  | mtry {Δ₀ Δ₁ Δ₀' Δ₁' : Context} {e₀ e₁ : Expression} {T : DataType}
-      {hW₁ : Context.WellFormed (Δ₀ ++ Δ₁)}
-      {hW₂ : Context.WellFormed (Δ₀' ++ Δ₁')}
-      (h₀ : List.Perm Δ₀ Δ₀') (h₁ : List.Perm Δ₁ Δ₁')
-      {d₀ : MixedDerivation Δ₀ e₀ T} {d₁ : MixedDerivation Δ₁ e₁ T}
-      {d₀' : MixedDerivation Δ₀' e₀ T} {d₁' : MixedDerivation Δ₁' e₁ T}
-      (r₀ : MixedEqv d₀ d₀') (r₁ : MixedEqv d₁ d₁') :
-      MixedEqv (.hasTypeTry hW₁ d₀ d₁) (.hasTypeTry hW₂ d₀' d₁')
-  | app {Δ Δ' : Context} {e : Expression} {f : Program} {T T' : DataType}
-      {df₁ df₂ : ProgramDerivation f (T ⇛ T')}
-      {de₁ : MixedDerivation Δ e T} {de₂ : MixedDerivation Δ' e T}
-      (hprog : programAmplitude df₁ = programAmplitude df₂)
-      (r : MixedEqv de₁ de₂) :
-      MixedEqv (.hasMixedTypeApp df₁ de₁) (.hasMixedTypeApp df₂ de₂)
-  /-- The cross case `T-Mix`/`T-MixedPair`: a mixed proof obtained by mixing a
-  *literal* pure pair proof is equivalent to a mixed pair proof of the same
-  expression, provided each pair component's mixed proof is equivalent to the
-  mixture of the corresponding pure component.  The two decompositions are
-  related by the recorded permutations `hΔ`, `h₀`, `h₁` (the paper's
-  `𝜋₂`, `𝜋₂⁰`, `𝜋₂¹`).  The pure components are written at the literal
-  pair's split, matching the `T-Pair` normal form of a pure pair proof. -/
-  | mixPair {Δ Δ₀ Δ₁ Δs Δ₀s Δ₁s : Context} {e₀ e₁ : Expression}
-      {T₀ T₁ : DataType}
-      {hWs : Context.WellFormed ((Δs ++ Δ₀s) ++ Δ₁s)}
-      {hW : Context.WellFormed ((Δ ++ Δ₀) ++ Δ₁)}
-      {hW₀s : Context.WellFormed (Δs ++ Δ₀s)}
-      {hW₁s : Context.WellFormed (Δs ++ Δ₁s)}
-      {dp₀ : PureDerivation [] (Δs ++ Δ₀s) e₀ T₀}
-      {dp₁ : PureDerivation [] (Δs ++ Δ₁s) e₁ T₁}
-      (hΔ : List.Perm Δs Δ) (h₀ : List.Perm Δ₀s Δ₀) (h₁ : List.Perm Δ₁s Δ₁)
-      {d₀ : MixedDerivation (Δ ++ Δ₀) e₀ T₀}
-      {d₁ : MixedDerivation (Δ ++ Δ₁) e₁ T₁}
-      (r₀ : MixedEqv (.hasTypeMix hW₀s dp₀) d₀)
-      (r₁ : MixedEqv (.hasTypeMix hW₁s dp₁) d₁) :
-      MixedEqv (.hasTypeMix hWs (.hasTypePurePair Context.WellFormed.nil hWs dp₀ dp₁))
-          (.hasMixedTypePair hW d₀ d₁)
-  /-- The cross case `T-Mix`/`T-MixedApp`: a mixed proof obtained by mixing a
-  *literal* pure application proof is equivalent to a mixed application proof
-  whose program is the channel (pure) form of the same program, provided the
-  mixed argument proof is equivalent to the mixture of the pure argument. -/
-  | mixApp {Δd Δ : Context} {e : Expression} {f : Program} {T T' : DataType}
-      {hWd : Context.WellFormed Δd}
-      {dp₀ : PureDerivation [] Δd e T}
-      {df : ProgramDerivation f (T ⇝ T')}
-      {de : MixedDerivation Δ e T}
-      (r : MixedEqv (.hasTypeMix hWd dp₀) de) :
-      MixedEqv (.hasTypeMix hWd (.hasTypePureApp df dp₀))
-          (.hasMixedTypeApp (.hasTypeChannel df) de)
-
-/-- Equivalent branch lists at corresponding (permutation-related) ctrl
-decompositions.  The frame permutations are parameters: one equivalence
-witness fixes the ctrl decomposition correspondence once, and every branch
-shares it.  Per-branch classical contexts `Γⱼ` are free rule data, so each
-`cons` carries pure equivalences for the pattern and the body at their own
-contexts. -/
-inductive BranchEqv :
-    {Γ₁ Γ₁' Δ₁ Δ₁' Γ₂ Γ₂' Δ₂ Δ₂' : Context} →
-    (hΓ : List.Perm Γ₁ Γ₂) → (hΓ' : List.Perm Γ₁' Γ₂') →
-    (hΔ : List.Perm Δ₁ Δ₂) → (hΔ' : List.Perm Δ₁' Δ₂') →
-    {l₁ l₂ : List ((Expression × Expression) × Context)} →
-    {T T' : DataType} →
-    BranchDerivation Γ₁ Γ₁' Δ₁ Δ₁' l₁ T T' →
-    BranchDerivation Γ₂ Γ₂' Δ₂ Δ₂' l₂ T T' → Type where
-  | nil {Γ₁ Γ₁' Δ₁ Δ₁' Γ₂ Γ₂' Δ₂ Δ₂' : Context} {T T' : DataType}
-      {hΓ : List.Perm Γ₁ Γ₂} {hΓ' : List.Perm Γ₁' Γ₂'}
-      {hΔ : List.Perm Δ₁ Δ₂} {hΔ' : List.Perm Δ₁' Δ₂'} :
-      BranchEqv hΓ hΓ' hΔ hΔ'
-        (BranchDerivation.nil Γ₁ Γ₁' Δ₁ Δ₁' T T')
-        (BranchDerivation.nil Γ₂ Γ₂' Δ₂ Δ₂' T T')
-  | cons {Γ₁ Γ₁' Δ₁ Δ₁' Γ₂ Γ₂' Δ₂ Δ₂' : Context}
-      {hΓ : List.Perm Γ₁ Γ₂} {hΓ' : List.Perm Γ₁' Γ₂'}
-      {hΔ : List.Perm Δ₁ Δ₂} {hΔ' : List.Perm Δ₁' Δ₂'}
-      {T T' : DataType} {Γⱼ₁ Γⱼ₂ : Context} {eⱼ eⱼ' : Expression}
-      {l₁ l₂ : List ((Expression × Expression) × Context)}
-      {dPat₁ : PureDerivation [] Γⱼ₁ eⱼ T}
-      {dPat₂ : PureDerivation [] Γⱼ₂ eⱼ T}
-      {dBody₁ : PureDerivation (Γ₁ ++ Γ₁' ++ Γⱼ₁) (Δ₁ ++ Δ₁') eⱼ' T'}
-      {dBody₂ : PureDerivation (Γ₂ ++ Γ₂' ++ Γⱼ₂) (Δ₂ ++ Δ₂') eⱼ' T'}
-      {b₁ : BranchDerivation Γ₁ Γ₁' Δ₁ Δ₁' l₁ T T'}
-      {b₂ : BranchDerivation Γ₂ Γ₂' Δ₂ Δ₂' l₂ T T'}
-      (hp : PureEqv dPat₁ dPat₂) (hb : PureEqv dBody₁ dBody₂)
-      (rt : BranchEqv hΓ hΓ' hΔ hΔ' b₁ b₂) :
-      BranchEqv hΓ hΓ' hΔ hΔ' (BranchDerivation.cons dPat₁ dBody₁ b₁)
-          (BranchDerivation.cons dPat₂ dBody₂ b₂)
-
+  /-- Equivalent branch lists at corresponding (permutation-related) ctrl
+  decompositions.  The frame permutations are parameters: one equivalence
+  witness fixes the ctrl decomposition correspondence once, and every branch
+  shares it.  Per-branch classical contexts `Γⱼ` are free rule data, so each
+  `cons` carries pure equivalences for the pattern and the body at their own
+  contexts. -/
+  inductive BranchEqv :
+      {Γ₁ Γ₁' Δ₁ Δ₁' Γ₂ Γ₂' Δ₂ Δ₂' : Context} →
+      (hΓ : List.Perm Γ₁ Γ₂) → (hΓ' : List.Perm Γ₁' Γ₂') →
+      (hΔ : List.Perm Δ₁ Δ₂) → (hΔ' : List.Perm Δ₁' Δ₂') →
+      {l₁ l₂ : List ((Expression × Expression) × Context)} →
+      {T T' : DataType} →
+      BranchDerivation Γ₁ Γ₁' Δ₁ Δ₁' l₁ T T' →
+      BranchDerivation Γ₂ Γ₂' Δ₂ Δ₂' l₂ T T' → Type where
+    | nil {Γ₁ Γ₁' Δ₁ Δ₁' Γ₂ Γ₂' Δ₂ Δ₂' : Context} {T T' : DataType}
+        {hΓ : List.Perm Γ₁ Γ₂} {hΓ' : List.Perm Γ₁' Γ₂'}
+        {hΔ : List.Perm Δ₁ Δ₂} {hΔ' : List.Perm Δ₁' Δ₂'} :
+        BranchEqv hΓ hΓ' hΔ hΔ'
+          (BranchDerivation.nil Γ₁ Γ₁' Δ₁ Δ₁' T T')
+          (BranchDerivation.nil Γ₂ Γ₂' Δ₂ Δ₂' T T')
+    | cons {Γ₁ Γ₁' Δ₁ Δ₁' Γ₂ Γ₂' Δ₂ Δ₂' : Context}
+        {hΓ : List.Perm Γ₁ Γ₂} {hΓ' : List.Perm Γ₁' Γ₂'}
+        {hΔ : List.Perm Δ₁ Δ₂} {hΔ' : List.Perm Δ₁' Δ₂'}
+        {T T' : DataType} {Γⱼ₁ Γⱼ₂ : Context} {eⱼ eⱼ' : Expression}
+        {l₁ l₂ : List ((Expression × Expression) × Context)}
+        {dPat₁ : PureDerivation [] Γⱼ₁ eⱼ T}
+        {dPat₂ : PureDerivation [] Γⱼ₂ eⱼ T}
+        {dBody₁ : PureDerivation (Γ₁ ++ Γ₁' ++ Γⱼ₁) (Δ₁ ++ Δ₁') eⱼ' T'}
+        {dBody₂ : PureDerivation (Γ₂ ++ Γ₂' ++ Γⱼ₂) (Δ₂ ++ Δ₂') eⱼ' T'}
+        {b₁ : BranchDerivation Γ₁ Γ₁' Δ₁ Δ₁' l₁ T T'}
+        {b₂ : BranchDerivation Γ₂ Γ₂' Δ₂ Δ₂' l₂ T T'}
+        (hp : PureEqv dPat₁ dPat₂) (hb : PureEqv dBody₁ dBody₂)
+        (rt : BranchEqv hΓ hΓ' hΔ hΔ' b₁ b₂) :
+        BranchEqv hΓ hΓ' hΔ hΔ' (BranchDerivation.cons dPat₁ dBody₁ b₁)
+            (BranchDerivation.cons dPat₂ dBody₂ b₂)
 end
 
 /-- Single-motive induction principle over mixed equivalences.  The pure and
@@ -3416,16 +1823,6 @@ abbrev BranchUniqueAt (n : Nat) : Prop :=
               (BranchEqv.transport hΓ hΓ' hΔ hΔ' σ₁ τ₁).1
               (BranchEqv.transport hΓ hΓ' hΔ hΔ' σ₁ τ₁).2 v
 
-abbrev PureAmpUniqueAt (n : Nat) : Prop :=
-  ∀ {Γ₁ Δ₁ Γ₂ Δ₂ : Context} {e : Expression} {T : DataType}
-    (d₁ : PureDerivation Γ₁ Δ₁ e T) (d₂ : PureDerivation Γ₂ Δ₂ e T),
-    d₁.depth + d₂.depth ≤ n →
-    ∀ (σ₁ : Valuation Γ₁) (τ₁ : Valuation Δ₁) (σ₂ : Valuation Γ₂)
-      (τ₂ : Valuation Δ₂) (v : Value T),
-      (σ₁.append τ₁).Agreed (σ₂.append τ₂) →
-      pureAmplitude d₁ σ₁ τ₁ v = pureAmplitude d₂ σ₂ τ₂ v
-
-/-- Base case: every mixed derivation has positive depth. -/
 theorem mixedUnique_base : MixedUnique 0 := by
   intro Δ₁ Δ₂ e T d₁ d₂ hsum r hshared
   have h₁ : 0 < d₁.depth := by cases d₁ <;> simp [MixedDerivation.depth]
@@ -4183,38 +2580,6 @@ theorem branchUnique_step {n : Nat} (pureIH : PureUniqueAt n)
 
 /-- The classical contexts a program derivation ranges over.  Agreement of
 this pair is the side condition of the `prog` field. -/
-def programCtx {f : Program} {F : ProgramType}
-    (d : ProgramDerivation f F) : Context × Context :=
-  match d with
-  | .hasTypeGate => ([], [])
-  | .hasTypeLeft => ([], [])
-  | .hasTypeRight => ([], [])
-  | .hasCoherentTypeAbs (Δ := Δ) _ _ => (Δ, [])
-  | .hasTypeRphase (Δ := Δ) _ => (Δ, [])
-  | .hasTypeChannel d => programCtx d
-  | .hasChannelTypeAbs (Δ := Δ) (Δ₀ := Δ₀) _ _ => (Δ, Δ₀)
-termination_by structural d
-
-
-/-! ### Program equivalences and uniqueness -/
-
-/-- Equivalent program proofs: same program and type.  The context
-decompositions chosen by the rules (`coherentAbs`/`rphase` record one
-context, `channelAbs` records a two-way split) are related by recorded
-permutations, and the pure/mixed/program sub-proofs carry their own
-equivalences.
-
-The paper's Appendix G also claims a cross case, T-Channel vs
-T-MixedAbs.  Under the paper's own `Δ₀`-generalized T-MixedAbs rule (the
-text after Figure 4 explicitly allows the pure sub-proof's context to
-extend beyond the mixed one, with the extra variables *measured*), that
-cross identity is false: for `λ(z ⊗ w) ↦ (x ⊗ y)`, both a channel proof
-(channel of a coherent proof with shared-padded pair contexts) and a
-channel-abs proof (with `Δ₀ = [z, w]`) exist, but the channel-of-coherent
-composes the input dyad while the channel-abs measures the `Δ₀` part, and
-the amplitudes differ by the resulting trace factor.  The refined
-equivalence therefore does not relate those two proofs; the same-rule
-cases below are all provable. -/
 inductive ProgEqv : {f : Program} → {F : ProgramType} →
     ProgramDerivation f F → ProgramDerivation f F → Type where
   | gate {θ φ ρ : RealConstant} :
