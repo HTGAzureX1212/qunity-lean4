@@ -1,6 +1,6 @@
 namespace Qunity
 
-inductive DataType where
+inductive DataType
   | void
   | unit
   | sum (A B : DataType)

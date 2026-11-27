@@ -105,7 +105,7 @@ mutual
 
   inductive HasMixedType : Context -> Expression -> DataType -> Prop
   where
-    | hasTypeMix : WellFormed Δ → HasPureType [] Δ e T -> HasMixedType Δ e T
+    | hasTypeMix : WellFormed Δ → HasPureType [] Δ e T → HasMixedType Δ e T
     | hasMixedTypePerm :
         WellFormed Δ' →
         HasMixedType Δ e T →
