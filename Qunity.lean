@@ -10,6 +10,7 @@ import Qunity.Semantics.Assignment
 import Qunity.Semantics.Denotations
 import Qunity.Semantics.Derivations
 import Qunity.Semantics.Valuation
+import Qunity.Semantics.WellDefined
 import Qunity.Typing.Context
 import Qunity.Typing.Inversion
 import Qunity.Typing.Rules
